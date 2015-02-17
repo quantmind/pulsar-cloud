@@ -1,1 +1,1 @@
--e git+https://github.com/quantmind/pulsar.git@3.4#egg=pulsar
+pulsar >= 3.4

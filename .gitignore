@@ -13,7 +13,7 @@ htmlcov
 #python
 *.pyc
 __pycache__
-odm.egg-info
+pulsar_pusher.egg-info
 build
 dist
 config.py
