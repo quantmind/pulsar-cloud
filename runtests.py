@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 import unittest
 from unittest import SkipTest
 
@@ -10,6 +11,10 @@ class PusherTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.pusher = cls.newPusher()
+
+    @classmethod
+    def newPusher(cls):
         cfg = cls.cfg.params
         app_id = cfg.get('pusher_app_id')
         app_key = cfg.get('pusher_app_key')
@@ -20,7 +25,7 @@ class PusherTest(unittest.TestCase):
             raise SkipTest('Requires pusher_app_key in tests/config.py')
         if not app_secret:
             raise SkipTest('Requires pusher_app_secret in tests/config.py')
-        cls.pusher = Pusher(app_id, key=app_key, secret=app_secret)
+        return Pusher(app_id, key=app_key, secret=app_secret)
 
     def test_pusher(self):
         pusher = self.pusher
@@ -41,15 +46,24 @@ class PusherTest(unittest.TestCase):
 
     def test_bind(self):
         pusher = self.pusher
-        channel = pusher['test_channel2']
 
-        def test_data(data):
-            pass
+        def test_data(data, event=None):
+            try:
+                self.assertEqual(event, 'hello')
+                self.assertEqual(data['message'], 'Hello world')
+            except Exception as exc:
+                future.set_exception(exc)
+            else:
+                future.set_result(None)
 
-        # channel.bind(test_data)
+        channel = yield from pusher.subscribe('test_channel2')
+        channel.bind('hello', test_data)
+
+        future = asyncio.Future()
         result = yield from channel.trigger('hello',
                                             {'message': 'Hello world'})
         self.assertEqual(result, True)
+        yield from future
 
 
 def run():
