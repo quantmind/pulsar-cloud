@@ -4,8 +4,6 @@ import asyncio
 import unittest
 from unittest import SkipTest
 
-from pusher import Pusher, PusherChannel
-
 
 class PusherTest(unittest.TestCase):
 
@@ -15,6 +13,7 @@ class PusherTest(unittest.TestCase):
 
     @classmethod
     def newPusher(cls):
+        from pusher import Pusher
         cfg = cls.cfg.params
         app_id = cfg.get('pusher_app_id')
         app_key = cfg.get('pusher_app_key')

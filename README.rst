@@ -21,7 +21,14 @@ Create a pusher instance
     from pusher import Pusher
 
     pusher = Pusher(app_id, key, secret)
-    
-    
+
+
+Subscribe to a channel as a client
+
+.. code:: python
+
+    channel = yield from pusher.subscribe('test_channel')
+    channel.bind('event', mycallback)
+
 .. _pusher: https://pusher.com/
 .. _pulsar: https://github.com/quantmind/pulsar

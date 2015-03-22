@@ -79,7 +79,7 @@ class PusherChannel(object):
                 callback(data, event=event)
         except Exception as exc:
             self.pusher.logger.exception(
-                'Unhandled exception during event "%s" on channel "%s"' %
+                'Unhandled exception during event "%s" on channel "%s"',
                 self.name, event)
 
 
