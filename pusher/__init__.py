@@ -158,7 +158,7 @@ class Pusher(ws.WS):
                 raise PusherError(data['message'], data['code'])
             elif event == PUSHER_CONNECTION:
                 self.socket_id = data.get('socket_id')
-                self.logger.info('Succesfully conneced on socket %s',
+                self.logger.info('Succesfully connected on socket %s',
                                  self.socket_id)
                 waiter.set_result(self.socket_id)
             elif event == PUSHER_SUBSCRIBED:

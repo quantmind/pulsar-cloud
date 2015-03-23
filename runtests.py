@@ -71,12 +71,12 @@ def run():
 
     args = sys.argv
     if '--coveralls' in args:
-        import quantflow
+        import pusher
         from pulsar.utils.path import Path
         from pulsar.apps.test.cov import coveralls
 
         repo_token = None
-        strip_dirs = [Path(quantflow.__file__).parent.parent, os.getcwd()]
+        strip_dirs = [Path(pusher.__file__).parent.parent, os.getcwd()]
         if os.path.isfile('.coveralls-repo-token'):
             with open('.coveralls-repo-token') as f:
                 repo_token = f.read().strip()
@@ -85,7 +85,7 @@ def run():
         sys.exit(0)
     # Run the test suite
     #
-    TestSuite(description='quantflow asynchronous test suite',
+    TestSuite(description='pulsar-pusher asynchronous test suite',
               modules=['runtests'],
               plugins=(bench.BenchMark(),
                        profile.Profile()),
