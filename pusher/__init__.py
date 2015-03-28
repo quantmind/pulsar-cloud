@@ -124,6 +124,7 @@ class Pusher(ws.WS):
                     raise PusherError("Could not connect to websocket")
             except Exception as exc:
                 waiter.set_exception(exc)
+                raise
             else:
                 yield from waiter
         return self._consumer
