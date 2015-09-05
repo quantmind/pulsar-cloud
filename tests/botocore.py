@@ -12,3 +12,7 @@ class BotocoreTest(unittest.TestCase):
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
         self.assertTrue(response)
+
+    def test_describe_spot_price_history(self):
+        response = yield from self.ec2.describe_spot_price_history()
+        self.assertTrue(response)
