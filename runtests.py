@@ -25,6 +25,7 @@ def run():
               modules=['tests'],
               plugins=(bench.BenchMark(),
                        profile.Profile()),
+              test_timeout=30,
               config='config.py').start()
 
 

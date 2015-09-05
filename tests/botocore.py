@@ -5,7 +5,10 @@ from cloud import Botocore
 
 class BotocoreTest(unittest.TestCase):
 
-    def test_botocore(self):
-        ec2 = Botocore('ec2', 'us-east-1')
-        response = yield from ec2.call('DescribeInstances')
+    @classmethod
+    def setUpClass(cls):
+        cls.ec2 = Botocore('ec2', 'us-east-1')
+
+    def test_describe_instances(self):
+        response = yield from self.ec2.describe_instances()
         self.assertTrue(response)

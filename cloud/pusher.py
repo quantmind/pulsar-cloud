@@ -5,7 +5,7 @@ import hmac
 import hashlib
 import asyncio
 import logging
-from urllib.parse import quote, urlsplit, urlencode
+from urllib.parse import quote, urlsplit
 
 from pulsar.apps import ws, http
 
@@ -77,7 +77,7 @@ class PusherChannel(object):
             callback = self._registered_callbacks.get(event)
             if callback:
                 callback(data, event=event)
-        except Exception as exc:
+        except Exception:
             self.pusher.logger.exception(
                 'Unhandled exception during event "%s" on channel "%s"',
                 self.name, event)
@@ -188,7 +188,7 @@ class Pusher(ws.WS):
                'body_md5=%s&name=%s' %
                (self.key, int(time.time()), hasher.hexdigest(), event))
         if socket_id:
-            ret += "&socket_id=" + text_type(socket_id)
+            ret += "&socket_id=%s" % socket_id
         return ret
 
     def authenticate(self, socket_id, custom_data=None):
