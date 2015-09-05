@@ -59,7 +59,7 @@ class PusherChannel(object):
         return response.status_code == 202
 
     def bind(self, event, callback):
-        '''Bind to an ``event`` in this channael. The ``callback`` function is
+        '''Bind to an ``event`` in this channel. The ``callback`` function is
         executed every time the event is triggered.
         '''
         self._registered_callbacks[event] = callback
@@ -104,7 +104,7 @@ class Pusher(ws.WS):
         self.logger = logging.getLogger('pulsar.pusher')
         self.http = http.HttpClient(websocket_handler=self)
         self._consumer = None
-        self._waiters = {}
+        self._waiter = None
         self._channels = {}
 
     def __getitem__(self, name):
@@ -119,6 +119,7 @@ class Pusher(ws.WS):
             waiter = self._waiter = asyncio.Future()
             try:
                 address = self._websocket_host()
+                self.logger.info('Connect to %s', address)
                 self._consumer = yield from self.http.get(address)
                 if self._consumer.status_code != 101:
                     raise PusherError("Could not connect to websocket")
@@ -170,6 +171,11 @@ class Pusher(ws.WS):
         except Exception as exc:
             if waiter:
                 waiter.set_exception(exc)
+            else:
+                self.logger.exception('pusher error')
+
+    def on_close(self, websocket):
+        self.logger.warning('Disconnected from pusher')
 
     def sign(self, message):
         return hmac.new(self.secret.encode('utf-8'),

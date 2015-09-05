@@ -1,4 +1,4 @@
-pulsar-pusher
+Pulsar Cloud
 ================
 
 A client and server pusher_ implementation using
@@ -8,7 +8,8 @@ Requirements
 ---------------
 
 * Python 3.4 or above
-* pulsar_ 3.4 or above
+* pulsar_
+* botocore_
 
 
 Usage
@@ -32,3 +33,4 @@ Subscribe to a channel as a client
 
 .. _pusher: https://pusher.com/
 .. _pulsar: https://github.com/quantmind/pulsar
+.. _botocore: https://github.com/quantmind/pulsar
