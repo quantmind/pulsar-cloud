@@ -11,6 +11,7 @@
 htmlcov
 
 #python
+pulsar_cloud.egg-info
 *.pyc
 __pycache__
 pulsar_pusher.egg-info

@@ -1,6 +1,12 @@
 Pulsar Cloud
 ================
 
+:Downloads: http://pypi.python.org/pypi/pulsar-cloud
+:Source: https://github.com/quantmind/pulsar-cloud
+:Mailing list: `google user group`_
+:Design by: `Quantmind`_ and `Luca Sbardella`_
+:Platforms: Linux, OSX, Windows. Python 3.4 and above
+:Keywords: amazon, aws, botocore, pusher, websocket, async, pulsar, greenlet
 
 Requirements
 ---------------
@@ -44,6 +50,9 @@ Subscribe to a channel as a client
     channel = yield from pusher.subscribe('test_channel')
     channel.bind('event', mycallback)
 
+.. _`Luca Sbardella`: http://lucasbardella.com
+.. _`Quantmind`: http://quantmind.com
+.. _`google user group`: https://groups.google.com/forum/?fromgroups#!forum/python-pulsar
 .. _pusher: https://pusher.com/
 .. _pulsar: https://github.com/quantmind/pulsar
 .. _botocore: https://github.com/boto/botocore
