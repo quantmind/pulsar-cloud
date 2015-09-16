@@ -8,8 +8,9 @@ class Botocore(object):
     '''An asynchronous wrapper for botocore
     '''
     def __init__(self, service_name, region_name=None,
-                 endpoint_url=None, session=None, **kwargs):
-        self._green_pool = None
+                 endpoint_url=None, session=None, green_pool=None,
+                 **kwargs):
+        self._green_pool = green_pool
         self.session = session or botocore.session.get_session()
         self.client = self.session.create_client(service_name,
                                                  region_name=region_name,
