@@ -1,5 +1,6 @@
 [run]
-source = pusher
+concurrency = greenlet
+source = cloud
 
 [report]
 # Regexes for lines to exclude from consideration

@@ -16,6 +16,8 @@ def wrap_poolmanager(poolmanager):
 
 
 class Sock(asyncio.StreamReaderProtocol):
+    '''Protocol for greenlet friendly sockets
+    '''
     _timeout = None
 
     def __init__(self):
