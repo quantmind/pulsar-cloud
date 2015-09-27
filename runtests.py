@@ -8,12 +8,12 @@ def run():
 
     args = sys.argv
     if '--coveralls' in args:
-        import pusher
+        import cloud
         from pulsar.utils.path import Path
         from pulsar.apps.test.cov import coveralls
 
         repo_token = None
-        strip_dirs = [Path(pusher.__file__).parent.parent, os.getcwd()]
+        strip_dirs = [Path(cloud.__file__).parent.parent, os.getcwd()]
         if os.path.isfile('.coveralls-repo-token'):
             with open('.coveralls-repo-token') as f:
                 repo_token = f.read().strip()

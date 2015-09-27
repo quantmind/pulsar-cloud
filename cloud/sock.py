@@ -54,7 +54,8 @@ class Sock(asyncio.StreamReaderProtocol):
 
 
 class SockRead:
-
+    '''Wrap a socket object for green IO
+    '''
     def __init__(self, sock):
         self._sock = sock
 
@@ -125,6 +126,8 @@ def _ssl_connect(self):
             self.assert_hostname is not False):
         cert = self.sock.getpeercert()
         if not cert.get('subjectAltName', ()):
+            # TODO: fix this hostname
+            hostname = None
             match_hostname(cert, self.assert_hostname or hostname)
 
         self.is_verified = (cert_reqs == ssl.CERT_REQUIRED
