@@ -1,3 +1,4 @@
+import os
 import unittest
 import asyncio
 from unittest import SkipTest
@@ -13,9 +14,10 @@ class PusherTest(unittest.TestCase):
     def newPusher(cls):
         from cloud import Pusher
         cfg = cls.cfg.params
-        app_id = cfg.get('pusher_app_id')
-        app_key = cfg.get('pusher_app_key')
-        app_secret = cfg.get('pusher_app_secret')
+        app_id = cfg.get('PUSHER_APP_ID', os.environ.get('PUSHER_APP_ID'))
+        app_key = cfg.get('PUSHER_APP_KEY', os.environ.get('PUSHER_APP_KEY'))
+        app_secret = cfg.get('PUSHER_APP_SECRET',
+                             os.environ.get('PUSHER_APP_SECRET'))
         if not app_id:
             raise SkipTest('Requires pusher_app_id in tests/config.py')
         if not app_key:

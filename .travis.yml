@@ -1,5 +1,7 @@
 language: python
 
+sudo: false
+
 python:
   - "3.4"
 
@@ -9,7 +11,7 @@ install:
 
 script:
   - flake8
-  - sudo rm -rf cloud
+  - rm -rf cloud
   - python -m runtests --coverage
   - python -m runtests --coveralls
 
