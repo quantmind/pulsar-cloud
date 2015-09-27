@@ -2,7 +2,8 @@ import os
 from setuptools import setup, find_packages
 
 try:
-    import pulsar   # noqa
+    import pulsar       # noqa
+    import botocore     # noqa
 except ImportError:
     os.environ['pulsar_cloud_setup'] = 'yes'
 
