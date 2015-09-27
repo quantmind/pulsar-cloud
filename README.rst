@@ -1,6 +1,7 @@
 Pulsar Cloud
 ================
 
+:Master CI: |master-build|_ |coverage-master|
 :Downloads: http://pypi.python.org/pypi/pulsar-cloud
 :Source: https://github.com/quantmind/pulsar-cloud
 :Mailing list: `google user group`_
@@ -8,6 +9,11 @@ Pulsar Cloud
 :Platforms: Linux, OSX, Windows. Python 3.4 and above
 :Keywords: amazon, aws, botocore, pusher, websocket, async, pulsar, greenlet
 
+.. |master-build| image:: https://travis-ci.org/quantmind/pulsar-cloud.svg?branch=master
+.. _master-build: http://travis-ci.org/quantmind/pulsar-cloud
+.. |coverage-master| image:: https://coveralls.io/repos/quantmind/pulsar-cloud/badge.svg?branch=master&service=github
+  :target: https://coveralls.io/github/quantmind/pulsar-cloud?branch=master
+  
 Requirements
 ---------------
 
