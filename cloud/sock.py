@@ -7,7 +7,7 @@ from botocore.vendored.requests.packages.urllib3.util.ssl_ import (
 from botocore.vendored.requests.packages.urllib3.packages.ssl_match_hostname\
     import match_hostname
 
-from pulsar.apps.greenio import wait
+from pulsar.apps.greenio import wait, getcurrent
 
 
 def wrap_poolmanager(poolmanager):
@@ -42,6 +42,7 @@ class Sock(asyncio.StreamReaderProtocol):
 
     def send(self, data):
         self._stream_writer.write(data)
+        # return wait(self._stream_writer.drain())
     sendall = send
 
     def makefile(self, mode=None):
@@ -56,7 +57,7 @@ class Sock(asyncio.StreamReaderProtocol):
 
 
 class SockRead:
-    '''Wrap a socket object for green IO
+    '''Wrap a Sock object for green IO
     '''
     def __init__(self, sock):
         self._sock = sock
@@ -67,11 +68,49 @@ class SockRead:
     def read(self, len=0):
         return wait(self._sock._stream_reader.read(len))
 
+    def readinto(self, b):
+        return wait(self._readinto(b))
+
     def flush(self):
-        return b''
+        pass
 
     def close(self):
         pass
+
+    def _readinto(self, b):
+        n = len(b)
+        bytes = yield from self._sock._stream_reader.read(n)
+        if bytes:
+            n = len(bytes)
+            b[0:n] = bytes
+            return n
+        return 0
+
+
+class StreamingBodyWsgiIterator:
+    '''A pulsar compliant WSGI iterator
+    '''
+    _data = None
+
+    def __init__(self, body, greenpool, n=-1):
+        self.body = body
+        self.greenpool = greenpool
+        self.n = n
+
+    def __iter__(self):
+        parent = getcurrent().parent
+        pool = self.greenpool
+        while True:
+            if parent:
+                yield self._read_body()
+            else:
+                yield pool.submit(self._read_body)
+            if not self._data:
+                break
+
+    def _read_body(self):
+        self._data = self.body.read(self.n)
+        return self._data
 
 
 def _pass(*args):
