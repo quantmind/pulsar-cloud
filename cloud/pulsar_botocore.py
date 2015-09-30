@@ -43,30 +43,50 @@ class Botocore(object):
         '''
         return StreamingBodyWsgiIterator(body, self.green_pool(), n)
 
-    def upload_file(self, bucket, filename, uploadpath=None,
+    def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
-        '''Upload a file to S3 using the multi-part uploader
+        '''Upload a file to S3 possibly using the multi-part uploader
+
+        Return the key uploaded
         '''
-        size = os.stat(filename).st_size
-        key = os.path.basename(filename)
-        if uploadpath:
-            if not uploadpath.endswith('/'):
-                uploadpath = '%s/' % uploadpath
-            key = '%s%s' % (uploadpath, key)
+        if hasattr(file, 'read'):
+            file = file.read()
+
+        is_file = False
+        if not isinstance(file, str):
+            size = len(file)
+        else:
+            is_file = True
+            size = os.stat(file).st_size
+            if not key:
+                key = os.path.basename(file)
+            if uploadpath:
+                if not uploadpath.endswith('/'):
+                    uploadpath = '%s/' % uploadpath
+                key = '%s%s' % (uploadpath, key)
+            if not ContentType:
+                ContentType, _ = mimetypes.guess_type(file)
+
+        assert key, 'key not available'
 
         params = dict(Bucket=bucket, Key=key)
-        if not ContentType:
-            ContentType, _ = mimetypes.guess_type(filename)
-
         if ContentType:
             params['ContentType'] = ContentType
 
-        if size > MULTI_PART_SIZE:
-            return self._multipart(filename, params)
+        if size > MULTI_PART_SIZE and is_file:
+            resp = self._multipart(file, params)
+        elif is_file:
+            with open(file, 'rb') as fp:
+                params['Body'] = fp.read()
+            resp = self.put_object(**params)
         else:
-            with open(filename, 'rb') as file:
-                params['Body'] = file.read()
-            return self.put_object(**params)
+            params['Body'] = file
+            resp = self.put_object(**params)
+        if 'Key' not in resp:
+            resp['Key'] = key
+        if 'Bucket' not in resp:
+            resp['Bucket'] = bucket
+        return resp
 
     def _call(self, operation, kwargs):
         if getcurrent().parent:
