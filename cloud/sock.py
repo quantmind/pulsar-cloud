@@ -40,6 +40,12 @@ class Sock(asyncio.StreamReaderProtocol):
         if self._stream_writer:
             return self._stream_writer._transport._sock
 
+    def fileno(self):
+        if self._sock:
+            return self._sock.fileno()
+        else:
+            return 0
+
     def send(self, data):
         self._stream_writer.write(data)
         # return wait(self._stream_writer.drain())

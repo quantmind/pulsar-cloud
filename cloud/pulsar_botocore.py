@@ -50,6 +50,8 @@ class Botocore(object):
         Return the key uploaded
         '''
         if hasattr(file, 'read'):
+            if hasattr(file, 'seek'):
+                file.seek(0)
             file = file.read()
 
         is_file = False
