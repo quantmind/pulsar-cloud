@@ -84,6 +84,9 @@ class BotocoreTest(unittest.TestCase):
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
         self.assertTrue(response)
+        https_adapter = self.ec2._endpoint.http_session.adapters['https://']
+        # pools = list(https_adapter.poolmanager.pools.values())
+        # self.assertEqual(len(pools), 1)
 
     def test_describe_spot_price_history(self):
         response = yield from self.ec2.describe_spot_price_history()

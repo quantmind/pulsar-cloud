@@ -77,6 +77,9 @@ class SockRead:
     def close(self):
         pass
 
+    def fileno(self):
+        return self._sock.fileno()
+
     def _readinto(self, b):
         n = len(b)
         bytes = yield from self._sock._stream_reader.read(n)
