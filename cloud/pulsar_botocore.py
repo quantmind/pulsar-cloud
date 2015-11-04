@@ -22,13 +22,18 @@ class Botocore(object):
                                                  region_name=region_name,
                                                  endpoint_url=endpoint_url,
                                                  **kwargs)
-        if green:
-            endpoint = self.client._endpoint
-            for adapter in endpoint.http_session.adapters.values():
-                adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
-
+        if green or green_pool:
             self._make_api_call = self.client._make_api_call
-            self.client._make_api_call = self._call
+
+            if green:
+                endpoint = self.client._endpoint
+                for adapter in endpoint.http_session.adapters.values():
+                    adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
+
+                self.client._make_api_call = self._call
+
+            else:
+                self.client._make_api_call = self._thread_call
 
     def __getattr__(self, operation):
         return getattr(self.client, operation)
@@ -96,6 +101,13 @@ class Botocore(object):
         else:
             pool = self.green_pool()
             return pool.submit(self._make_api_call, operation, kwargs)
+
+    def _thread_call(self, operation, kwargs):
+        '''A call using the event loop executor
+        '''
+        pool = self.green_pool()
+        loop = pool._loop
+        return pool.wait(loop.run_in_executor(None, operation, kwargs))
 
     def _read_body(self, body, n):
         return
