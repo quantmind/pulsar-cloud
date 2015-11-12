@@ -67,14 +67,15 @@ class Botocore(object):
             size = os.stat(file).st_size
             if not key:
                 key = os.path.basename(file)
-            if uploadpath:
-                if not uploadpath.endswith('/'):
-                    uploadpath = '%s/' % uploadpath
-                key = '%s%s' % (uploadpath, key)
             if not ContentType:
                 ContentType, _ = mimetypes.guess_type(file)
 
         assert key, 'key not available'
+
+        if uploadpath:
+            if not uploadpath.endswith('/'):
+                uploadpath = '%s/' % uploadpath
+            key = '%s%s' % (uploadpath, key)
 
         params = dict(Bucket=bucket, Key=key)
         if ContentType:
