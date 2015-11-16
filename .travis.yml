@@ -3,7 +3,7 @@ language: python
 sudo: false
 
 python:
-  - "3.4"
+  - "3.4.3"
 
 install:
   - pip install -r requirements-dev.txt
