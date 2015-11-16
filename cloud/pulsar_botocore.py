@@ -143,3 +143,53 @@ class Botocore(object):
             else:
                 self.abort_multipart_upload(Bucket=bucket, Key=key,
                                             UploadId=uid)
+
+    def copy_storage_object(self, source_bucket, source_key, bucket, key):
+        info = self.head_object(Bucket=source_bucket, Key=source_key)
+        size = info['ContentLength']
+
+        if size > MULTI_PART_SIZE:
+            return self._multipart_copy(source_bucket, source_key,
+                                        bucket, key, size)
+        else:
+            return self.copy_object(
+                Bucket=bucket, Key=key,
+                CopySource=self._source_string(source_bucket, source_key)
+            )
+
+    def _source_string(self, bucket, key):
+        return '{}/{}'.format(bucket, key)
+
+    def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
+        response = self.create_multipart_upload(Bucket=bucket, Key=key)
+        start = 0
+        parts = []
+        num = 1
+        uid = response['UploadId']
+        params = {
+            'CopySource': self._source_string(source_bucket, source_key),
+            'Bucket': bucket,
+            'Key': key,
+            'UploadId': uid
+        }
+        try:
+            while start < size:
+                end = min(size, start + MULTI_PART_SIZE)
+                params['PartNumber'] = num
+                params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
+                part = self.upload_part_copy(**params)
+                parts.append(dict(
+                    ETag=part['CopyPartResult']['ETag'], PartNumber=num))
+                start = end
+                num += 1
+        except:
+            self.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=uid)
+            raise
+        else:
+            if parts:
+                all = dict(Parts=parts)
+                return self.complete_multipart_upload(
+                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=all)
+            else:
+                self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                            UploadId=uid)

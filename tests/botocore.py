@@ -21,6 +21,7 @@ def green(f):
 
 
 ONEKB = 2**10
+BUCKET = os.environ.get('TEST_S3_BUCKET', 'quantmind-tests')
 
 
 class RandomFile:
@@ -67,18 +68,18 @@ class BotocoreTest(unittest.TestCase):
         meta = response['ResponseMetadata']
         self.assertEqual(meta['HTTPStatusCode'], code)
 
-    def clean_up(self, r):
-        response = self.s3.head_object(Bucket='quantmind-tests',
-                                       Key=r.key)
+    def clean_up(self, key, size):
+        response = self.s3.head_object(Bucket=BUCKET,
+                                       Key=key)
         self.assert_status(response)
-        self.assertEqual(response['ContentLength'], r.size)
+        self.assertEqual(response['ContentLength'], size)
         # Delete
-        response = self.s3.delete_object(Bucket='quantmind-tests',
-                                         Key=r.key)
+        response = self.s3.delete_object(Bucket=BUCKET,
+                                         Key=key)
         self.assert_status(response, 204)
         self.assertRaises(ClientError, self.s3.get_object,
-                          Bucket='quantmind-tests',
-                          Key=r.key)
+                          Bucket=BUCKET,
+                          Key=key)
 
     # TESTS
     def test_describe_instances(self):
@@ -98,7 +99,7 @@ class BotocoreTest(unittest.TestCase):
 
     @green
     def test_get_object_chunks(self):
-        response = self.s3.get_object(Bucket='quantmind-tests',
+        response = self.s3.get_object(Bucket=BUCKET,
                                       Key='requirements.txt')
         self.assert_status(response)
         data = b''
@@ -114,37 +115,63 @@ class BotocoreTest(unittest.TestCase):
         with open(__file__, 'r') as f:
             body = f.read()
             key = '%s.py' % random_string(characters=string.ascii_letters)
-            response = self.s3.put_object(Bucket='quantmind-tests',
+            response = self.s3.put_object(Bucket=BUCKET,
                                           Body=body,
                                           ContentType='text/plain',
                                           Key=key)
             self.assert_status(response)
         #
         # Read object
-        response = self.s3.get_object(Bucket='quantmind-tests',
+        response = self.s3.get_object(Bucket=BUCKET,
                                       Key=key)
         self.assert_status(response)
         self.assertEqual(response['ContentType'], 'text/plain')
         #
         # Delete object
-        response = self.s3.delete_object(Bucket='quantmind-tests',
+        response = self.s3.delete_object(Bucket=BUCKET,
                                          Key=key)
         self.assert_status(response, 204)
         self.assertRaises(ClientError, self.s3.get_object,
-                          Bucket='quantmind-tests', Key=key)
+                          Bucket=BUCKET, Key=key)
 
     @green
     def test_upload_binary(self):
         with RandomFile(2**12) as r:
-            response = self.s3.upload_file('quantmind-tests',
+            response = self.s3.upload_file(BUCKET,
                                            r.filename)
             self.assert_status(response)
-            self.clean_up(r)
+            self.clean_up(r.key, r.size)
 
     @green
     def test_upload_binary_large(self):
         with RandomFile(int(1.5*MULTI_PART_SIZE)) as r:
-            response = self.s3.upload_file('quantmind-tests',
+            response = self.s3.upload_file(BUCKET,
                                            r.filename)
             self.assert_status(response)
-            self.clean_up(r)
+            self.clean_up(r.key, r.size)
+
+    @green
+    def test_copy(self):
+        self._test_copy(2**12)
+
+    @green
+    def test_copy_large(self):
+        self._test_copy(1.5*MULTI_PART_SIZE)
+
+    def _test_copy(self, size):
+        with RandomFile(int(size)) as r:
+            response = self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response)
+            copy_key = 'copy_{}'.format(r.key)
+            response = self.s3.copy_storage_object(
+                BUCKET, r.key, BUCKET, copy_key)
+            self.assert_status(response)
+            self.assert_s3_equal(r.filename, copy_key)
+            self.clean_up(r.key, r.size)
+            self.clean_up(copy_key, r.size)
+
+    def assert_s3_equal(self, filename, copy_name):
+        response = self.s3.get_object(Bucket=BUCKET, Key=copy_name)
+        with open(filename, 'rb') as fo:
+            body = b''.join(self.s3.wsgi_stream_body(response['Body']))
+            self.assertEqual(body, fo.read())
