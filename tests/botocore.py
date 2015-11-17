@@ -56,13 +56,15 @@ class RandomFile:
         return b''
 
 
-class BotocoreTest(unittest.TestCase):
+class BotocoreMixin:
+    _green = True
 
     @classmethod
     def setUpClass(cls):
         cls.green_pool = GreenPool()
-        cls.ec2 = Botocore('ec2', 'us-east-1', green_pool=cls.green_pool)
-        cls.s3 = Botocore('s3', green_pool=cls.green_pool)
+        cls.ec2 = Botocore('ec2', 'us-east-1', green_pool=cls.green_pool,
+                           green=cls._green)
+        cls.s3 = Botocore('s3', green_pool=cls.green_pool, green=cls._green)
 
     def assert_status(self, response, code=200):
         meta = response['ResponseMetadata']
@@ -92,23 +94,6 @@ class BotocoreTest(unittest.TestCase):
     def test_describe_spot_price_history(self):
         response = yield from self.ec2.describe_spot_price_history()
         self.assertTrue(response)
-
-    def test_list_buckets(self):
-        buckets = yield from self.s3.list_buckets()
-        self.assertTrue(buckets)
-
-    @green
-    def test_get_object_chunks(self):
-        response = self.s3.get_object(Bucket=BUCKET,
-                                      Key='requirements.txt')
-        self.assert_status(response)
-        data = b''
-        while True:
-            text = response['Body'].read(10)
-            if not text:
-                break
-            data += text
-        self.assertTrue(data)
 
     @green
     def test_upload_text(self):
@@ -175,3 +160,18 @@ class BotocoreTest(unittest.TestCase):
         with open(filename, 'rb') as fo:
             body = b''.join(self.s3.wsgi_stream_body(response['Body']))
             self.assertEqual(body, fo.read())
+
+
+class BotocoreTestGreen(BotocoreMixin, unittest.TestCase):
+
+    @green
+    def test_concurrency(self):
+        self.assertEqual(self.s3.concurrency, 'green')
+
+
+class BotocoreTestThread(BotocoreMixin, unittest.TestCase):
+    _green = False
+
+    @green
+    def test_concurrency(self):
+        self.assertEqual(self.s3.concurrency, 'thread')

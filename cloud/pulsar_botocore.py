@@ -38,6 +38,13 @@ class Botocore(object):
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
+    @property
+    def concurrency(self):
+        if self.client._make_api_call == self._thread_call:
+            return 'thread'
+        elif self.client._make_api_call == self._call:
+            return 'green'
+
     def green_pool(self):
         if not self._green_pool:
             self._green_pool = GreenPool()
@@ -104,11 +111,12 @@ class Botocore(object):
             return pool.submit(self._make_api_call, operation, kwargs)
 
     def _thread_call(self, operation, kwargs):
-        '''A call using the event loop executor
+        '''A call using the event loop executor.
         '''
         pool = self.green_pool()
         loop = pool._loop
-        return pool.wait(loop.run_in_executor(None, operation, kwargs))
+        return pool.wait(loop.run_in_executor(None, self._make_api_call,
+                                              operation, kwargs))
 
     def _read_body(self, body, n):
         return
