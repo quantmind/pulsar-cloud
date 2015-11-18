@@ -101,19 +101,15 @@ class StreamingBodyWsgiIterator:
     '''
     _data = None
 
-    def __init__(self, body, greenpool, n=-1):
+    def __init__(self, body, blocking_call, n=-1):
         self.body = body
-        self.greenpool = greenpool
+        self._blocking_call = blocking_call
         self.n = n
 
     def __iter__(self):
-        parent = getcurrent().parent
-        pool = self.greenpool
+
         while True:
-            if parent:
-                yield self._read_body()
-            else:
-                yield pool.submit(self._read_body)
+            yield self._blocking_call(self._read_body)
             if not self._data:
                 break
 

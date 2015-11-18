@@ -1,5 +1,6 @@
 import os
 import mimetypes
+import functools
 
 import botocore.session
 
@@ -24,25 +25,26 @@ class Botocore(object):
                                                  **kwargs)
         if green or green_pool:
             self._make_api_call = self.client._make_api_call
+            self.client._make_api_call = self._api_call
 
             if green:
                 endpoint = self.client._endpoint
                 for adapter in endpoint.http_session.adapters.values():
                     adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
 
-                self.client._make_api_call = self._call
+                self._blocking_call = self._call
 
             else:
-                self.client._make_api_call = self._thread_call
+                self._blocking_call = self._thread_call
 
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
     @property
     def concurrency(self):
-        if self.client._make_api_call == self._thread_call:
+        if self._blocking_call == self._thread_call:
             return 'thread'
-        elif self.client._make_api_call == self._call:
+        elif self._blocking_call == self._call:
             return 'green'
 
     def green_pool(self):
@@ -53,7 +55,7 @@ class Botocore(object):
     def wsgi_stream_body(self, body, n=-1):
         '''WSGI iterator of a botocore StreamingBody
         '''
-        return StreamingBodyWsgiIterator(body, self.green_pool(), n)
+        return StreamingBodyWsgiIterator(body, self._blocking_call, n)
 
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
@@ -103,20 +105,23 @@ class Botocore(object):
             resp['Bucket'] = bucket
         return resp
 
-    def _call(self, operation, kwargs):
+    def _api_call(self, operation, kwargs):
+        return self._blocking_call(self._make_api_call, operation, kwargs)
+
+    def _call(self, func, *args, **kwargs):
         if getcurrent().parent:
-            return self._make_api_call(operation, kwargs)
+            return func(*args, **kwargs)
         else:
             pool = self.green_pool()
-            return pool.submit(self._make_api_call, operation, kwargs)
+            return pool.submit(func, *args, **kwargs)
 
-    def _thread_call(self, operation, kwargs):
+    def _thread_call(self, func, *args, **kwargs):
         '''A call using the event loop executor.
         '''
         pool = self.green_pool()
         loop = pool._loop
-        return pool.wait(loop.run_in_executor(None, self._make_api_call,
-                                              operation, kwargs))
+        return pool.wait(loop.run_in_executor(None, functools.partial(func,
+                                              *args, **kwargs)))
 
     def _read_body(self, body, n):
         return
