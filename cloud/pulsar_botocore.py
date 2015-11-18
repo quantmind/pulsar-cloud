@@ -1,10 +1,10 @@
 import os
 import mimetypes
-import functools
 
 import botocore.session
 
 from pulsar.apps.greenio import GreenPool, getcurrent
+
 from .sock import wrap_poolmanager, StreamingBodyWsgiIterator
 
 # 8MB for multipart uploads
@@ -24,27 +24,27 @@ class Botocore(object):
                                                  endpoint_url=endpoint_url,
                                                  **kwargs)
         if green or green_pool:
-            self._make_api_call = self.client._make_api_call
-            self.client._make_api_call = self._api_call
+            self._blocking_api_call = self.client._make_api_call
+            self.client._make_api_call = self._make_api_call
 
             if green:
                 endpoint = self.client._endpoint
                 for adapter in endpoint.http_session.adapters.values():
                     adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
 
-                self._blocking_call = self._call
+                self._async_call = self._green_call
 
             else:
-                self._blocking_call = self._thread_call
+                self._async_call = self._thread_call
 
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
     @property
     def concurrency(self):
-        if self._blocking_call == self._thread_call:
+        if self._async_call == self._thread_call:
             return 'thread'
-        elif self._blocking_call == self._call:
+        elif self._async_call == self._green_call:
             return 'green'
 
     def green_pool(self):
@@ -55,7 +55,7 @@ class Botocore(object):
     def wsgi_stream_body(self, body, n=-1):
         '''WSGI iterator of a botocore StreamingBody
         '''
-        return StreamingBodyWsgiIterator(body, self._blocking_call, n)
+        return StreamingBodyWsgiIterator(body, self._async_call, n)
 
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
@@ -105,23 +105,24 @@ class Botocore(object):
             resp['Bucket'] = bucket
         return resp
 
-    def _api_call(self, operation, kwargs):
-        return self._blocking_call(self._make_api_call, operation, kwargs)
+    # INTERNALS
 
-    def _call(self, func, *args, **kwargs):
+    def _make_api_call(self, operation, kwargs):
+        return self._async_call(self._blocking_api_call, operation, kwargs)
+
+    def _green_call(self, func, *args):
         if getcurrent().parent:
-            return func(*args, **kwargs)
+            return func(*args)
         else:
             pool = self.green_pool()
-            return pool.submit(func, *args, **kwargs)
+            return pool.submit(func, *args)
 
-    def _thread_call(self, func, *args, **kwargs):
+    def _thread_call(self, func, *args):
         '''A call using the event loop executor.
         '''
         pool = self.green_pool()
         loop = pool._loop
-        return pool.wait(loop.run_in_executor(None, functools.partial(func,
-                                              *args, **kwargs)))
+        return pool.wait(loop.run_in_executor(None, func, *args))
 
     def _read_body(self, body, n):
         return

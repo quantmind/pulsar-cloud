@@ -71,8 +71,7 @@ class BotocoreMixin:
         self.assertEqual(meta['HTTPStatusCode'], code)
 
     def clean_up(self, key, size):
-        response = self.s3.head_object(Bucket=BUCKET,
-                                       Key=key)
+        response = self.s3.head_object(Bucket=BUCKET, Key=key)
         self.assert_status(response)
         self.assertEqual(response['ContentLength'], size)
         # Delete
@@ -80,8 +79,7 @@ class BotocoreMixin:
                                          Key=key)
         self.assert_status(response, 204)
         self.assertRaises(ClientError, self.s3.get_object,
-                          Bucket=BUCKET,
-                          Key=key)
+                          Bucket=BUCKET, Key=key)
 
     # TESTS
     def test_describe_instances(self):
@@ -107,8 +105,7 @@ class BotocoreMixin:
             self.assert_status(response)
         #
         # Read object
-        response = self.s3.get_object(Bucket=BUCKET,
-                                      Key=key)
+        response = self.s3.get_object(Bucket=BUCKET, Key=key)
         self.assert_status(response)
         self.assertEqual(response['ContentType'], 'text/plain')
         #
@@ -122,8 +119,7 @@ class BotocoreMixin:
     @green
     def test_upload_binary(self):
         with RandomFile(2**12) as r:
-            response = self.s3.upload_file(BUCKET,
-                                           r.filename)
+            response = self.s3.upload_file(BUCKET, r.filename)
             self.assert_status(response)
             self.clean_up(r.key, r.size)
 
