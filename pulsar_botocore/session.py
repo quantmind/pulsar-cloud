@@ -1,8 +1,10 @@
 import botocore.session
 import botocore.credentials
-from botocore import utils
+from botocore import utils, retryhandler, translate
 
 from pulsar import get_event_loop, new_event_loop
+
+from pulsar_botocore.client import PulsarClientCreator
 
 
 class PulsarSession(botocore.session.Session):
@@ -36,8 +38,16 @@ class PulsarSession(botocore.session.Session):
                 token=aws_session_token)
         else:
             credentials = self.get_credentials()
+        endpoint_resolver = self.get_component('endpoint_resolver')
 
-        # TODO ClientCreator
+        client_creator = PulsarClientCreator(
+            loader, endpoint_resolver, self.user_agent(), event_emitter,
+            retryhandler, translate, response_parser_factory, loop=self._loop)
+        client = client_creator.create_client(
+            service_name, region_name, use_ssl, endpoint_url, verify,
+            credentials, scoped_config=self.get_scoped_config(),
+            client_config=config)
+        return client
 
 
 def get_session(*, env_vars=None, loop=None):
