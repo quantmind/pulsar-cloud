@@ -6,6 +6,16 @@ from pulsar.apps.http import HttpClient
 import os
 
 
+def convert_to_response_dict(http_response, operation_model):
+    response_dict = {
+        'headers': http_response.headers,
+        'status_code': http_response.status_code,
+        'body': http_response.get_content()
+    }
+    return response_dict
+    # TODO
+
+
 def _get_verify_value(verify):
     if verify is not None:
         return verify
@@ -41,7 +51,6 @@ class PulsarEndpoint(botocore.endpoint.Endpoint):
                                                timeout=None, data=data,
                                                loop=self._loop,
                                                headers=headers_)
-        print(resp)
         return resp
 
     def _send_request(self, request_dict, operation_model):
@@ -71,8 +80,17 @@ class PulsarEndpoint(botocore.endpoint.Endpoint):
             resp = yield from self._request(
                 request.method, request.url, request.headers, request.body)
             http_response = resp
+
         except ConnectionError as e:
-            print(e)
+            print(e)  # TODO
+
+        response_dict = convert_to_response_dict(
+            http_response, operation_model)
+        parser = self._response_parser_factory.create_parser(
+            operation_model.metadata['protocol'])
+        return ((http_response, parser.parse(response_dict,
+                                             operation_model.output_shape)),
+                None)
     # TODO
 
 
