@@ -4,7 +4,7 @@ from botocore import utils, retryhandler, translate
 
 from pulsar import get_event_loop, new_event_loop
 
-from pulsar_botocore.client import PulsarClientCreator
+from .client import PulsarClientCreator
 
 
 class PulsarSession(botocore.session.Session):
