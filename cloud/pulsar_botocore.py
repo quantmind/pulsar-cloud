@@ -32,19 +32,22 @@ class Botocore(object):
                 for adapter in endpoint.http_session.adapters.values():
                     adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
 
-                self._async_call = self._green_call
+                self._blocking_call = self._green_call
 
             else:
-                self._async_call = self._thread_call
+                self._blocking_call = self._thread_call
+
+        else:
+            self._blocking_call = self._sync_call
 
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
     @property
     def concurrency(self):
-        if self._async_call == self._thread_call:
+        if self._blocking_call == self._thread_call:
             return 'thread'
-        elif self._async_call == self._green_call:
+        elif self._blocking_call == self._green_call:
             return 'green'
 
     def green_pool(self):
@@ -55,7 +58,7 @@ class Botocore(object):
     def wsgi_stream_body(self, body, n=-1):
         '''WSGI iterator of a botocore StreamingBody
         '''
-        return StreamingBodyWsgiIterator(body, self._async_call, n)
+        return StreamingBodyWsgiIterator(body, self._blocking_call, n)
 
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
@@ -108,7 +111,7 @@ class Botocore(object):
     # INTERNALS
 
     def _make_api_call(self, operation, kwargs):
-        return self._async_call(self._blocking_api_call, operation, kwargs)
+        return self._blocking_call(self._blocking_api_call, operation, kwargs)
 
     def _green_call(self, func, *args):
         if getcurrent().parent:
@@ -124,8 +127,8 @@ class Botocore(object):
         loop = pool._loop
         return pool.wait(loop.run_in_executor(None, func, *args))
 
-    def _read_body(self, body, n):
-        return
+    def _sync_call(self, func, *args):
+        return func(*args)
 
     def _multipart(self, filename, params):
         response = self.create_multipart_upload(**params)
