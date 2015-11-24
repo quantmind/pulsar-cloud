@@ -1,13 +1,20 @@
 import unittest
 
-from pulsar import as_coroutine
-from pulsar_botocore.session import get_session
+from pulsar import task
+from cloud.wrapper import PulsarBotocore
 
 
-class BotoTest(unittest.TestCase):
+class PulsarBotocoreTest(unittest.TestCase):
+    def setUp(self):
+        self.ec2 = PulsarBotocore('ec2', 'us-east-1')
+        self.s3 = PulsarBotocore('s3', 'us-east-1')
 
-    def test_pulsar_botocore_can_make_request(self):
-        session = get_session()
-        client = session.create_client('ec2', 'us-east-1')
-        result = yield from as_coroutine(client.describe_instances())
-        self.assertEqual(result['ResponseMetadata']['HTTPStatusCode'], 200)
+    @task
+    def test_describe_instances(self):
+        response = yield from self.ec2.describe_instances()
+        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+
+    @task
+    def test_describe_spot_price_history(self):
+        response = yield from self.ec2.describe_spot_price_history()
+        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)

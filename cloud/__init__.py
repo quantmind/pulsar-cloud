@@ -13,7 +13,8 @@ if os.environ.get('pulsar_cloud_setup') != 'yes':
 
     from .pulsar_botocore import Botocore
     from .pusher import Pusher
+    from .wrapper import PulsarBotocore
 
     __version__ = get_version(VERSION)
 
-    __all__ = ['Botocore', 'Pusher']
+    __all__ = ['Botocore', 'PulsarBotocore', 'Pusher']

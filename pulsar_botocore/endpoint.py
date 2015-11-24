@@ -4,7 +4,7 @@ import botocore.endpoint
 from botocore.endpoint import get_environ_proxies, DEFAULT_TIMEOUT
 from botocore.exceptions import EndpointConnectionError
 
-from pulsar import get_event_loop, new_event_loop, TcpServer, as_coroutine
+from pulsar import get_event_loop, new_event_loop, TcpServer
 from pulsar import task
 from pulsar.apps.http import HttpClient
 
