@@ -7,7 +7,7 @@ from botocore.vendored.requests.packages.urllib3.util.ssl_ import (
 from botocore.vendored.requests.packages.urllib3.packages.ssl_match_hostname\
     import match_hostname
 
-from pulsar.apps.greenio import wait, getcurrent
+from pulsar.apps.greenio import wait
 
 
 def wrap_poolmanager(poolmanager):
