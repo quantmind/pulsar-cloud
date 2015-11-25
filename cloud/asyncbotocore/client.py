@@ -1,17 +1,17 @@
 import copy
+import asyncio
 
 import botocore.client
 import botocore.serialize
 import botocore.parsers
 from botocore.exceptions import ClientError
 from botocore.signers import RequestSigner
-from pulsar import get_event_loop, new_event_loop, task
 from pulsar.apps.http import HttpClient
 
-from .endpoint import PulsarEndpointCreator
+from .endpoint import AsyncEndpointCreator
 
 
-class PulsarClientCreator(botocore.client.ClientCreator):
+class AsyncClientCreator(botocore.client.ClientCreator):
 
     def __init__(self, loader, endpoint_resolver, user_agent, event_emitter,
                  retry_handler_factory, retry_config_translator,
@@ -20,7 +20,7 @@ class PulsarClientCreator(botocore.client.ClientCreator):
                          retry_handler_factory, retry_config_translator,
                          response_parser_factory=response_parser_factory)
 
-        self._loop = loop or get_event_loop() or new_event_loop()
+        self._loop = loop or asyncio.get_event_loop()
         self._client = client or HttpClient(loop=self._loop)
 
     def _get_client_args(self, service_model, region_name, is_secure,
@@ -33,11 +33,11 @@ class PulsarClientCreator(botocore.client.ClientCreator):
 
         event_emitter = copy.copy(self._event_emitter)
 
-        endpoint_creator = PulsarEndpointCreator(self._endpoint_resolver,
-                                                 region_name, event_emitter,
-                                                 self._user_agent,
-                                                 loop=self._loop,
-                                                 client=self._client)
+        endpoint_creator = AsyncEndpointCreator(self._endpoint_resolver,
+                                                region_name, event_emitter,
+                                                self._user_agent,
+                                                loop=self._loop,
+                                                client=self._client)
 
         endpoint = endpoint_creator.create_endpoint(
             service_model, region_name, is_secure=is_secure,
@@ -91,7 +91,7 @@ class PulsarClientCreator(botocore.client.ClientCreator):
         class_attributes = self._create_methods(service_model)
         py_name_to_operation_name = self._create_name_mapping(service_model)
         class_attributes['_PY_TO_OP_NAME'] = py_name_to_operation_name
-        bases = [PulsarBaseClient]
+        bases = [AsyncBaseClient]
         self._event_emitter.emit('creating-client-class.%s' % service_name,
                                  class_attributes=class_attributes,
                                  base_classes=bases)
@@ -99,9 +99,9 @@ class PulsarClientCreator(botocore.client.ClientCreator):
         return cls
 
 
-class PulsarBaseClient(botocore.client.BaseClient):
+class AsyncBaseClient(botocore.client.BaseClient):
 
-    @task
+    @asyncio.coroutine
     def _make_api_call(self, operation_name, api_params):
         operation_model = self._service_model.operation_model(operation_name)
         request_dict = self._convert_to_request_dict(

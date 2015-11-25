@@ -1,13 +1,12 @@
+import asyncio
 import botocore.session
 import botocore.credentials
 from botocore import utils, retryhandler, translate
 
-from pulsar import get_event_loop, new_event_loop
-
-from .client import PulsarClientCreator
+from .client import AsyncClientCreator
 
 
-class PulsarSession(botocore.session.Session):
+class AsyncSession(botocore.session.Session):
     def __init__(self, session_vars=None, event_hooks=None,
                  include_builtin_handlers=True, loader=None, loop=None):
 
@@ -15,6 +14,7 @@ class PulsarSession(botocore.session.Session):
                          include_builtin_handlers=include_builtin_handlers)
 
         self._loop = loop
+        self._loader = loader
 
     def create_client(self, service_name, region_name=None, api_version=None,
                       use_ssl=True, verify=None, endpoint_url=None,
@@ -40,7 +40,7 @@ class PulsarSession(botocore.session.Session):
             credentials = self.get_credentials()
         endpoint_resolver = self.get_component('endpoint_resolver')
 
-        client_creator = PulsarClientCreator(
+        client_creator = AsyncClientCreator(
             loader, endpoint_resolver, self.user_agent(), event_emitter,
             retryhandler, translate, response_parser_factory, loop=self._loop)
         client = client_creator.create_client(
@@ -54,5 +54,5 @@ def get_session(*, env_vars=None, loop=None):
     """
     Return a new session object.
     """
-    loop = loop or get_event_loop() or new_event_loop()
-    return PulsarSession(session_vars=env_vars, loop=loop)
+    loop = loop or asyncio.get_event_loop()
+    return AsyncSession(session_vars=env_vars, loop=loop)
