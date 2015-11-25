@@ -19,7 +19,7 @@ class AsyncSession(botocore.session.Session):
     def create_client(self, service_name, region_name=None, api_version=None,
                       use_ssl=True, verify=None, endpoint_url=None,
                       aws_access_key_id=None, aws_secret_access_key=None,
-                      aws_session_token=None, config=None):
+                      aws_session_token=None, config=None, http_client=None):
 
         if endpoint_url is not None:
             self.unregister('before-sign.s3', utils.fix_s3_host)
@@ -42,7 +42,8 @@ class AsyncSession(botocore.session.Session):
 
         client_creator = AsyncClientCreator(
             loader, endpoint_resolver, self.user_agent(), event_emitter,
-            retryhandler, translate, response_parser_factory, loop=self._loop)
+            retryhandler, translate, response_parser_factory, loop=self._loop,
+            http_client=http_client)
         client = client_creator.create_client(
             service_name, region_name, use_ssl, endpoint_url, verify,
             credentials, scoped_config=self.get_scoped_config(),

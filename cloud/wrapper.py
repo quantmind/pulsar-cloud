@@ -10,13 +10,14 @@ from .sock import wrap_poolmanager
 MULTI_PART_SIZE = 2**23
 
 
-class PulsarBotocore(object):
+class AsyncBotocore(object):
     def __init__(self, service_name, region_name=None,
-                 endpoint_url=None, session=None, **kwargs):
+                 endpoint_url=None, session=None, http_client=None,
+                 **kwargs):
         self.session = session or get_session()
         self.client = self.session.create_client(
             service_name, region_name=region_name, endpoint_url=endpoint_url,
-            **kwargs)
+            http_client=http_client, **kwargs)
 
         endpoint = self.client._endpoint
         for adapter in endpoint.http_session.adapters.values():

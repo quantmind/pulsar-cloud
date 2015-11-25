@@ -6,7 +6,6 @@ import botocore.serialize
 import botocore.parsers
 from botocore.exceptions import ClientError
 from botocore.signers import RequestSigner
-from pulsar.apps.http import HttpClient
 
 from .endpoint import AsyncEndpointCreator
 
@@ -15,13 +14,13 @@ class AsyncClientCreator(botocore.client.ClientCreator):
 
     def __init__(self, loader, endpoint_resolver, user_agent, event_emitter,
                  retry_handler_factory, retry_config_translator,
-                 response_parser_factory=None, loop=None, client=None):
+                 response_parser_factory=None, loop=None, http_client=None):
         super().__init__(loader, endpoint_resolver, user_agent, event_emitter,
                          retry_handler_factory, retry_config_translator,
                          response_parser_factory=response_parser_factory)
 
         self._loop = loop or asyncio.get_event_loop()
-        self._client = client or HttpClient(loop=self._loop)
+        self.http_client = http_client
 
     def _get_client_args(self, service_model, region_name, is_secure,
                          endpoint_url, verify, credentials,
@@ -37,7 +36,7 @@ class AsyncClientCreator(botocore.client.ClientCreator):
                                                 region_name, event_emitter,
                                                 self._user_agent,
                                                 loop=self._loop,
-                                                client=self._client)
+                                                http_client=self.http_client)
 
         endpoint = endpoint_creator.create_endpoint(
             service_model, region_name, is_secure=is_secure,
