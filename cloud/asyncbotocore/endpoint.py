@@ -40,7 +40,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
 
         self._loop = loop or asyncio.get_event_loop()
         self.http_client = http_client
-        self._connector = aiohttp.TCPConnector(loop=self._loop)
+        #self._connector = aiohttp.TCPConnector(loop=self._loop)
 
     @asyncio.coroutine
     def _request(self, method, url, headers, data):
