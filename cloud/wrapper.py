@@ -12,13 +12,13 @@ MULTI_PART_SIZE = 2**23
 
 class AsyncBotocore(object):
     def __init__(self, service_name, region_name=None,
-                 endpoint_url=None, session=None, http_client=None,
+                 endpoint_url=None, loop=None, session=None, http_client=None,
                  **kwargs):
-        self.session = session or get_session()
+        loop = loop or None
+        self.session = session or get_session(loop=loop)
         self.client = self.session.create_client(
             service_name, region_name=region_name, endpoint_url=endpoint_url,
             http_client=http_client, **kwargs)
-
         endpoint = self.client._endpoint
         for adapter in endpoint.http_session.adapters.values():
             adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)

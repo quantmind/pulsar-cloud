@@ -1,5 +1,6 @@
 import os
 import asyncio
+import aiohttp
 
 import botocore.endpoint
 from botocore.endpoint import get_environ_proxies, DEFAULT_TIMEOUT
@@ -39,16 +40,17 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
 
         self._loop = loop or asyncio.get_event_loop()
         self.http_client = http_client
+        self._connector = aiohttp.TCPConnector(loop=self._loop)
 
     @asyncio.coroutine
     def _request(self, method, url, headers, data):
         headers_ = dict(
             (z[0], text_(z[1], encoding='utf-8')) for z in headers.items())
-
         resp = yield from self.http_client.request(method=method, url=url,
                                                    data=data,
                                                    loop=self._loop,
-                                                   headers=headers_)
+                                                   headers=headers_,
+                                                   connector=self._connector)
         return resp
 
     @asyncio.coroutine
