@@ -1,7 +1,6 @@
 import os
 import mimetypes
-
-from pulsar import task
+import asyncio
 
 from cloud.asyncbotocore.session import get_session
 from .sock import wrap_poolmanager
@@ -26,7 +25,7 @@ class AsyncBotocore(object):
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
-    @task
+    @asyncio.coroutine
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
         if hasattr(file, 'read'):
