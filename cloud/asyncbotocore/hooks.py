@@ -31,7 +31,6 @@ class AsyncHierarchicalEmitter(HierarchicalEmitter):
         kwargs['event_name'] = event_name
         responses = []
         for handler in handlers_to_call:
-            print(handler)
             logger.debug('Event %s: calling handler %s', event_name, handler)
             response = handler(**kwargs)
             if asyncio.iscoroutine(response):
