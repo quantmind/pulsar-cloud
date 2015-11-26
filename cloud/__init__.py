@@ -1,6 +1,6 @@
 import os
 
-VERSION = (0, 3, 0, 'alpha', 0)
+VERSION = (0, 3, 1, 'final', 0)
 
 __version__ = '.'.join((str(v) for v in VERSION))
 __author__ = "Luca Sbardella"
