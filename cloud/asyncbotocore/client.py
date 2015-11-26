@@ -5,9 +5,11 @@ import botocore.client
 import botocore.serialize
 import botocore.parsers
 from botocore.exceptions import ClientError
-from botocore.signers import RequestSigner
+from botocore.hooks import first_non_none_response
+from botocore.awsrequest import prepare_request_dict
 
 from .endpoint import AsyncEndpointCreator
+from .signers import AsyncRequestSigner
 
 
 class AsyncClientCreator(botocore.client.ClientCreator):
@@ -64,10 +66,10 @@ class AsyncClientCreator(botocore.client.ClientCreator):
             if client_config.user_agent_extra is not None:
                 user_agent += ' %s' % client_config.user_agent_extra
 
-        signer = RequestSigner(service_model.service_name, region_name,
-                               service_model.signing_name,
-                               signature_version, credentials,
-                               event_emitter)
+        signer = AsyncRequestSigner(service_model.service_name, region_name,
+                                    service_model.signing_name,
+                                    signature_version, credentials,
+                                    event_emitter)
 
         client_config = botocore.client.Config(
             region_name=region_name,
@@ -102,7 +104,7 @@ class AsyncBaseClient(botocore.client.BaseClient):
     @asyncio.coroutine
     def _make_api_call(self, operation_name, api_params):
         operation_model = self._service_model.operation_model(operation_name)
-        request_dict = self._convert_to_request_dict(
+        request_dict = yield from self._convert_to_request_dict(
             api_params, operation_model)
         http, parsed_response = yield from self._endpoint.make_request(
             operation_model, request_dict)
@@ -118,6 +120,45 @@ class AsyncBaseClient(botocore.client.BaseClient):
         if http.status_code >= 300:
             raise ClientError(parsed_response, operation_name)
         return parsed_response
+
+    @asyncio.coroutine
+    def _convert_to_request_dict(self, api_params, operation_model):
+        # Given the API params provided by the user and the operation_model
+        # we can serialize the request to a request_dict.
+        operation_name = operation_model.name
+
+        # Emit an event that allows users to modify the parameters at the
+        # beginning of the method. It allows handlers to modify existing
+        # parameters or return a new set of parameters to use.
+
+        responses = yield from self.meta.events.emit(
+            'provide-client-params.{endpoint_prefix}.{operation_name}'.format(
+                endpoint_prefix=self._service_model.endpoint_prefix,
+                operation_name=operation_name),
+            params=api_params, model=operation_model)
+        api_params = first_non_none_response(responses, default=api_params)
+
+        event_name = (
+            'before-parameter-build.{endpoint_prefix}.{operation_name}')
+        yield from self.meta.events.emit(
+            event_name.format(
+                endpoint_prefix=self._service_model.endpoint_prefix,
+                operation_name=operation_name),
+            params=api_params, model=operation_model)
+
+        request_dict = self._serializer.serialize_to_request(
+            api_params, operation_model)
+        prepare_request_dict(request_dict, endpoint_url=self._endpoint.host,
+                             user_agent=self._client_config.user_agent)
+
+        yield from self.meta.events.emit(
+            'before-call.{endpoint_prefix}.{operation_name}'.format(
+                endpoint_prefix=self._service_model.endpoint_prefix,
+                operation_name=operation_name),
+            model=operation_model, params=request_dict,
+            request_signer=self._request_signer
+        )
+        return request_dict
 
     def close(self):
         self._endpoint._connector.close()

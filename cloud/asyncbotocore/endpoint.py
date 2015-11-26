@@ -7,7 +7,7 @@ from botocore.endpoint import get_environ_proxies
 from botocore.exceptions import EndpointConnectionError, \
     BaseEndpointResolverError
 from botocore.utils import is_valid_endpoint_url
-
+from botocore.awsrequest import create_request_object
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 60
@@ -48,6 +48,19 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         self.http_client = http_client
 
     @asyncio.coroutine
+    def create_request(self, params, operation_model=None):
+        request = create_request_object(params)
+        if operation_model:
+            event_name = 'request-created.{endpoint_prefix}.{op_name}'.format(
+                endpoint_prefix=self._endpoint_prefix,
+                op_name=operation_model.name)
+            yield from self._event_emitter.emit(
+                event_name, request=request,
+                operation_name=operation_model.name)
+        prepared_request = self.prepare_request(request)
+        return prepared_request
+
+    @asyncio.coroutine
     def _request(self, method, url, headers, data):
         headers_ = dict(
             (z[0], text_(z[1], encoding='utf-8')) for z in headers.items())
@@ -68,8 +81,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
                 'application/octet-stream'
 
         attempts = 1
-
-        request = self.create_request(request_dict, operation_model)
+        request = yield from self.create_request(request_dict, operation_model)
 
         success_response, exception = yield from self._get_response(
             request, operation_model, attempts)
