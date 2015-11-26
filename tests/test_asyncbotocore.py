@@ -4,8 +4,6 @@ import os
 import tempfile
 import string
 
-from botocore.exceptions import ClientError
-
 from cloud.wrapper import AsyncBotocore
 from pulsar.apps.http import HttpClient
 from pulsar.utils.string import random_string
@@ -49,11 +47,11 @@ class RandomFile:
 
 class AsyncBotocoreTest(unittest.TestCase):
     def setUp(self):
-        http = HttpClient()
-        self.ec2 = AsyncBotocore('ec2', 'us-east-1', http_client=http,
-                                 loop=http._loop)
-        self.s3 = AsyncBotocore('s3', 'us-east-1', http_client=http,
-                                loop=http._loop)
+        self.http = HttpClient()
+        self.ec2 = AsyncBotocore('ec2', 'us-east-1', http_client=self.http,
+                                 loop=self.http._loop)
+        self.s3 = AsyncBotocore('s3', 'us-east-1', http_client=self.http,
+                                loop=self.http._loop)
 
     @asyncio.coroutine
     def test_describe_instances(self):
@@ -75,13 +73,14 @@ class AsyncBotocoreTest(unittest.TestCase):
                                                       Key=key))
             self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'],
                              200)
+
         # Read object
-        response = yield from (self.s3.get_object(Bucket=BUCKET, Key=key))
+        yield from asyncio.sleep(3, loop=self.http._loop)
+        response = yield from self.s3.get_object(Bucket=BUCKET, Key=key)
         self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
         self.assertEqual(response['ContentType'], 'text/plain')
 
         # Delete Object
+        yield from asyncio.sleep(3, loop=self.http._loop)
         response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
         self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 204)
-        self.assertRaises(ClientError, self.s3.get_object,
-                          Bucket=BUCKET, Key=key)

@@ -26,9 +26,8 @@ def text_(s, encoding='utf-8', errors='strict'):
 
 
 def convert_to_response_dict(http_response, operation_model):
-    # TODO fix headers
     response_dict = {
-        'headers': http_response.headers,
+        'headers': dict(http_response.headers),
         'status_code': http_response.status_code,
         'body': http_response.get_content()
     }
