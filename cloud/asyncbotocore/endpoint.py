@@ -1,10 +1,16 @@
 import os
 import asyncio
-import aiohttp
+import logging
 
 import botocore.endpoint
-from botocore.endpoint import get_environ_proxies, DEFAULT_TIMEOUT
-from botocore.exceptions import EndpointConnectionError
+from botocore.endpoint import get_environ_proxies
+from botocore.exceptions import EndpointConnectionError, \
+    BaseEndpointResolverError
+from botocore.utils import is_valid_endpoint_url
+
+
+logger = logging.getLogger(__name__)
+DEFAULT_TIMEOUT = 60
 
 
 def _get_verify_value(verify):
@@ -40,7 +46,6 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
 
         self._loop = loop or asyncio.get_event_loop()
         self.http_client = http_client
-        #self._connector = aiohttp.TCPConnector(loop=self._loop)
 
     @asyncio.coroutine
     def _request(self, method, url, headers, data):
@@ -49,8 +54,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         resp = yield from self.http_client.request(method=method, url=url,
                                                    data=data,
                                                    loop=self._loop,
-                                                   headers=headers_,
-                                                   connector=self._connector)
+                                                   headers=headers_)
         return resp
 
     @asyncio.coroutine
@@ -101,6 +105,12 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
                                              operation_model.output_shape)),
                 None)
 
+    @asyncio.coroutine
+    def make_request(self, operation_model, request_dict):
+        logger.debug("Making request for %s (verify_ssl=%s) with params: %s",
+                     operation_model, self.verify, request_dict)
+        return (yield from self._send_request(request_dict, operation_model))
+
 
 class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
     def __init__(self, endpoint_resolver, configured_region, event_emitter,
@@ -108,6 +118,37 @@ class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
         super().__init__(endpoint_resolver, configured_region, event_emitter)
         self._loop = loop
         self.http_client = http_client
+
+    def create_endpoint(self, service_model, region_name=None, is_secure=True,
+                        endpoint_url=None, verify=None,
+                        response_parser_factory=None, timeout=DEFAULT_TIMEOUT):
+        if region_name is None:
+            region_name = self._configured_region
+        # Use the endpoint resolver heuristics to build the endpoint url.
+        scheme = 'https' if is_secure else 'http'
+        try:
+            endpoint = self._endpoint_resolver.construct_endpoint(
+                service_model.endpoint_prefix,
+                region_name, scheme=scheme)
+        except BaseEndpointResolverError:
+            if endpoint_url is not None:
+                # If the user provides an endpoint_url, it's ok
+                # if the heuristics didn't find anything.  We use the
+                # user provided endpoint_url.
+                endpoint = {'uri': endpoint_url, 'properties': {}}
+            else:
+                raise
+
+        if endpoint_url is not None:
+            # If the user provides an endpoint url, we'll use that
+            # instead of what the heuristics rule gives us.
+            final_endpoint_url = endpoint_url
+        else:
+            final_endpoint_url = endpoint['uri']
+        if not is_valid_endpoint_url(final_endpoint_url):
+            raise ValueError("Invalid endpoint: %s" % final_endpoint_url)
+        return self._get_endpoint(
+            service_model, final_endpoint_url, verify, response_parser_factory)
 
     def _get_endpoint(self, service_model, endpoint_url,
                       verify, response_parser_factory):
