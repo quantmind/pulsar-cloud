@@ -26,6 +26,7 @@ def text_(s, encoding='utf-8', errors='strict'):
 
 
 def convert_to_response_dict(http_response, operation_model):
+    # TODO fix headers
     response_dict = {
         'headers': http_response.headers,
         'status_code': http_response.status_code,
@@ -46,6 +47,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
 
         self._loop = loop or asyncio.get_event_loop()
         self.http_client = http_client
+        self._response_parser_factory = response_parser_factory
 
     @asyncio.coroutine
     def create_request(self, params, operation_model=None):
@@ -72,6 +74,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
 
     @asyncio.coroutine
     def _send_request(self, request_dict, operation_model):
+        '''
         headers = request_dict['headers']
         for key in headers.keys():
             if key.lower().startswith('content-type'):
@@ -79,7 +82,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         else:
             request_dict['headers']['Content-Type'] = \
                 'application/octet-stream'
-
+        '''
         attempts = 1
         request = yield from self.create_request(request_dict, operation_model)
 
@@ -97,7 +100,6 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             resp = yield from self._request(
                 request.method, request.url, request.headers, request.body)
             http_response = resp
-
         except ConnectionError as e:
             if self._looks_like_dns_error(e):
                 endpoint_url = request.url
@@ -113,6 +115,8 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             http_response, operation_model)
         parser = self._response_parser_factory.create_parser(
             operation_model.metadata['protocol'])
+        # print('response dict')
+        # print(response_dict)
         return ((http_response, parser.parse(response_dict,
                                              operation_model.output_shape)),
                 None)
