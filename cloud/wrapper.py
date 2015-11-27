@@ -60,10 +60,10 @@ class AsyncBotocore(object):
         elif is_file:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
-            resp = self.put_object(**params)
+            resp = yield from self.put_object(**params)
         else:
             params['Body'] = file
-            resp = self.put_object(**params)
+            resp = yield from self.put_object(**params)
         if 'Key' not in resp:
             resp['Key'] = key
         if 'Bucket' not in resp:

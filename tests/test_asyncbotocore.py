@@ -84,3 +84,36 @@ class AsyncBotocoreTest(unittest.TestCase):
         yield from asyncio.sleep(3, loop=self.http._loop)
         response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
         self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 204)
+
+    @asyncio.coroutine
+    def test_create_multipart_upload(self):
+        key = 'multipartupload'
+        response = yield from self.s3.create_multipart_upload(
+            Bucket=BUCKET, Key=key)
+        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+
+        upload_id = response['UploadId']
+        self.addCleanup(
+            self.s3.abort_multipart_upload,
+            Bucket=BUCKET, Key=key, UploadId=upload_id
+        )
+
+        response = yield from self.s3.list_multipart_uploads(
+            Bucket=BUCKET, Prefix=key
+        )
+
+        # Make sure there is only one multipart upload.
+        self.assertEqual(len(response['Uploads']), 1)
+        # Make sure the upload id is as expected.
+        self.assertEqual(response['Uploads'][0]['UploadId'], upload_id)
+
+    def test_upload_binary(self):
+        with RandomFile(2**12) as r:
+            response = yield from self.s3.upload_file(BUCKET, r.filename)
+            self.assertEqual(
+                response['ResponseMetadata']['HTTPStatusCode'], 200)
+            # Delete object
+            response = yield from self.s3.delete_object(Bucket=BUCKET,
+                                                        Key=r.key)
+            self.assertEqual(
+                response['ResponseMetadata']['HTTPStatusCode'], 204)
