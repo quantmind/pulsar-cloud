@@ -119,8 +119,6 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             http_response, operation_model)
         parser = self._response_parser_factory.create_parser(
             operation_model.metadata['protocol'])
-        # print('response dict')
-        # print(response_dict)
         return ((http_response, parser.parse(response_dict,
                                              operation_model.output_shape)),
                 None)

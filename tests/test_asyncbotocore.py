@@ -4,7 +4,7 @@ import os
 import tempfile
 import string
 
-from cloud.wrapper import AsyncBotocore
+from cloud.wrapper import AsyncBotocore, MULTI_PART_SIZE
 from pulsar.apps.http import HttpClient
 from pulsar.utils.string import random_string
 
@@ -54,14 +54,37 @@ class AsyncBotocoreTest(unittest.TestCase):
                                 loop=self.http._loop)
 
     @asyncio.coroutine
+    def assert_status(self, response, status_code):
+        self.assertEqual(
+            response['ResponseMetadata']['HTTPStatusCode'],
+            status_code
+        )
+
+    @asyncio.coroutine
+    def assert_s3_equal(self, filename, copy_name):
+        response = yield from self.s3.get_object(Bucket=BUCKET, Key=copy_name)
+        with open(filename, 'rb') as fo:
+            body = b''.join(self.s3.wsgi_stream_body(response['Body']))
+            self.assertEqual(body, fo.read())
+
+    @asyncio.coroutine
+    def clean_up(self, key, size):
+        response = self.s3.head_object(Bucket=BUCKET, Key=key)
+        self.assert_status(response, 200)
+        self.assertEqual(response['ContentLength'], size)
+        # Delete
+        response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
+        self.assert_status(response, 204)
+
+    @asyncio.coroutine
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+        self.assert_status(response, 200)
 
     @asyncio.coroutine
     def test_describe_spot_price_history(self):
         response = yield from self.ec2.describe_spot_price_history()
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+        self.assert_status(response, 200)
 
     @asyncio.coroutine
     def test_upload_text(self):
@@ -71,49 +94,55 @@ class AsyncBotocoreTest(unittest.TestCase):
             response = yield from (self.s3.put_object(Bucket=BUCKET, Body=body,
                                                       ContentType='text/plain',
                                                       Key=key))
-            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'],
-                             200)
+            self.assert_status(response, 200)
 
         # Read object
         yield from asyncio.sleep(3, loop=self.http._loop)
         response = yield from self.s3.get_object(Bucket=BUCKET, Key=key)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+        self.assert_status(response, 200)
         self.assertEqual(response['ContentType'], 'text/plain')
 
         # Delete Object
         yield from asyncio.sleep(3, loop=self.http._loop)
         response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 204)
+        self.assert_status(response, 204)
 
     @asyncio.coroutine
-    def test_create_multipart_upload(self):
-        key = 'multipartupload'
-        response = yield from self.s3.create_multipart_upload(
-            Bucket=BUCKET, Key=key)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-
-        upload_id = response['UploadId']
-        self.addCleanup(
-            self.s3.abort_multipart_upload,
-            Bucket=BUCKET, Key=key, UploadId=upload_id
-        )
-
-        response = yield from self.s3.list_multipart_uploads(
-            Bucket=BUCKET, Prefix=key
-        )
-
-        # Make sure there is only one multipart upload.
-        self.assertEqual(len(response['Uploads']), 1)
-        # Make sure the upload id is as expected.
-        self.assertEqual(response['Uploads'][0]['UploadId'], upload_id)
-
     def test_upload_binary(self):
         with RandomFile(2**12) as r:
             response = yield from self.s3.upload_file(BUCKET, r.filename)
-            self.assertEqual(
-                response['ResponseMetadata']['HTTPStatusCode'], 200)
-            # Delete object
-            response = yield from self.s3.delete_object(Bucket=BUCKET,
-                                                        Key=r.key)
-            self.assertEqual(
-                response['ResponseMetadata']['HTTPStatusCode'], 204)
+            self.assert_status(response, 200)
+            self.clean_up(r.key, r.size)
+
+    @asyncio.coroutine
+    def test_upload_binary_large(self):
+        with RandomFile(int(1.5*MULTI_PART_SIZE)) as r:
+            response = yield from self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response)
+            self.clean_up(r.key, r.size)
+
+    @asyncio.coroutine
+    def test_copy(self):
+        with RandomFile(2**12) as r:
+            response = yield from self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response, 200)
+            copy_key = 'copy_{}'.format(r.key)
+            response = yield from self.s3.copy_storage_object(
+                BUCKET, r.key, BUCKET, copy_key)
+            self.assert_status(response, 200)
+            self.assert_s3_equal(r.filename, copy_key)
+            self.clean_up(r.key, r.size)
+            self.clean_up(copy_key, r.size)
+
+    @asyncio.coroutine
+    def test_copy_large(self):
+        with RandomFile(2*MULTI_PART_SIZE) as r:
+            response = yield from self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response, 200)
+            copy_key = 'copy_{}'.format(r.key)
+            response = yield from self.s3.copy_storage_object(
+                BUCKET, r.key, BUCKET, copy_key)
+            self.assert_status(response, 200)
+            self.assert_s3_equal(r.filename, copy_key)
+            self.clean_up(r.key, r.size)
+            self.clean_up(copy_key, r.size)

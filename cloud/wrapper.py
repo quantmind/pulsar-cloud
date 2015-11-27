@@ -3,7 +3,7 @@ import mimetypes
 import asyncio
 
 from cloud.asyncbotocore.session import get_session
-from .sock import wrap_poolmanager
+from .sock import wrap_poolmanager, StreamingBodyWsgiIterator
 
 # 8MB for multipart uploads
 MULTI_PART_SIZE = 2**23
@@ -56,7 +56,7 @@ class AsyncBotocore(object):
             params['ContentType'] = ContentType
 
         if size > MULTI_PART_SIZE and is_file:
-            resp = self._multipart(file, params)
+            resp = yield from self._multipart(file, params)
         elif is_file:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
@@ -69,3 +69,102 @@ class AsyncBotocore(object):
         if 'Bucket' not in resp:
             resp['Bucket'] = bucket
         return resp
+
+    @asyncio.coroutine
+    def _multipart(self, filename, params):
+        response = yield from self.create_multipart_upload(**params)
+        bucket = params['Bucket']
+        key = params['Key']
+        uid = response['UploadId']
+        params['UploadId'] = uid
+        params.pop('ContentType', None)
+        try:
+            parts = []
+            with open(filename, 'rb') as file:
+                while True:
+                    body = file.read(MULTI_PART_SIZE)
+                    if not body:
+                        break
+                    num = len(parts) + 1
+                    params['Body'] = body
+                    params['PartNumber'] = num
+                    part = yield from self.upload_part(**params)
+                    parts.append(dict(ETag=part['ETag'], PartNumber=num))
+        except:
+            yield from self.abort_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=uid)
+            raise
+        else:
+            if parts:
+                all_parts = dict(Parts=parts)
+                response = yield from self.complete_multipart_upload(
+                    Bucket=bucket, UploadId=uid, Key=key,
+                    MultipartUpload=all_parts)
+                return response
+            else:
+                yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                       UploadId=uid)
+
+    @asyncio.coroutine
+    def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
+        response = yield from self.create_multipart_upload(Bucket=bucket,
+                                                           Key=key)
+        start = 0
+        parts = []
+        num = 1
+        uid = response['UploadId']
+        params = {
+            'CopySource': self._source_string(source_bucket, source_key),
+            'Bucket': bucket,
+            'Key': key,
+            'UploadId': uid
+        }
+        try:
+            while start < size:
+                end = min(size, start + MULTI_PART_SIZE)
+                params['PartNumber'] = num
+                params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
+                part = yield from self.upload_part_copy(**params)
+                parts.append(dict(
+                    ETag=part['CopyPartResult']['ETag'], PartNumber=num))
+                start = end
+                num += 1
+        except:
+            yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                   UploadId=uid)
+            raise
+        else:
+            if parts:
+                all = dict(Parts=parts)
+                response = yield from self.complete_multipart_upload(
+                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=all)
+                return response
+            else:
+                yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                       UploadId=uid)
+
+    @asyncio.coroutine
+    def copy_storage_object(self, source_bucket, source_key, bucket, key):
+        info = yield from self.head_object(
+            Bucket=source_bucket, Key=source_key)
+
+        size = info['ContentLength']
+
+        if size > MULTI_PART_SIZE:
+            response = yield from self._multipart_copy(
+                source_bucket, source_key, bucket, key, size)
+            return response
+        else:
+            response = yield from self.copy_object(
+                Bucket=bucket, Key=key,
+                CopySource=self._source_string(source_bucket, source_key)
+            )
+            return response
+
+    def _source_string(self, bucket, key):
+        return '{}/{}'.format(bucket, key)
+
+    def wsgi_stream_body(self, body, n=-1):
+        '''WSGI iterator of a botocore StreamingBody
+        '''
+        return StreamingBodyWsgiIterator(body, self._async_call, n)
