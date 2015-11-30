@@ -4,10 +4,10 @@ import os
 import tempfile
 import string
 
-from cloud.wrapper import AsyncBotocore, MULTI_PART_SIZE
 from pulsar.apps.http import HttpClient
 from pulsar.utils.string import random_string
 
+from cloud.asyncbotocore.session import get_session
 
 ONEKB = 2**10
 BUCKET = os.environ.get('TEST_S3_BUCKET', 'quantmind-tests')
@@ -46,12 +46,17 @@ class RandomFile:
 
 
 class AsyncBotocoreTest(unittest.TestCase):
-    def setUp(self):
-        self.http = HttpClient()
-        self.ec2 = AsyncBotocore('ec2', 'us-east-1', http_client=self.http,
-                                 loop=self.http._loop)
-        self.s3 = AsyncBotocore('s3', 'us-east-1', http_client=self.http,
-                                loop=self.http._loop)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.http = HttpClient()
+        cls.session = get_session(loop=cls.http._loop)
+        cls.ec2 = cls.session.create_client('ec2',
+                                            region_name='us-east-1',
+                                            http_client=cls.http)
+        cls.s3 = cls.session.create_client('s3',
+                                           region_name='us-east-1',
+                                           http_client=cls.http)
 
     @asyncio.coroutine
     def assert_status(self, response, status_code):

@@ -1,71 +1,75 @@
 import os
 import mimetypes
+import asyncio
+from functools import wraps
 
 import botocore.session
 
 from pulsar.apps.greenio import GreenPool, getcurrent
 
-from .sock import wrap_poolmanager, StreamingBodyWsgiIterator
+from .asyncbotocore.session import get_session
 
 # 8MB for multipart uploads
 MULTI_PART_SIZE = 2**23
 
 
-class Botocore(object):
-    '''An asynchronous wrapper for botocore
-    '''
+def green(f):
+
+    @wraps(f)
+    def _(self, *args):
+        return self._green_pool.wait(f(self, *args))
+
+    return _
+
+
+class GreenBotocore(object):
+
     def __init__(self, service_name, region_name=None,
-                 endpoint_url=None, session=None, green_pool=None,
-                 green=True, **kwargs):
-        self._green_pool = green_pool
-        self.session = session or botocore.session.get_session()
-        self.client = self.session.create_client(service_name,
-                                                 region_name=region_name,
-                                                 endpoint_url=endpoint_url,
-                                                 **kwargs)
-        if green or green_pool:
-            self._blocking_api_call = self.client._make_api_call
-            self.client._make_api_call = self._make_api_call
+                 endpoint_url=None, loop=None, green_pool=None,
+                 session=None, http_client=None,
+                 **kwargs):
+        self._green_pool = green_pool or GreenPool(loop=loop)
 
-            if green:
-                endpoint = self.client._endpoint
-                for adapter in endpoint.http_session.adapters.values():
-                    adapter.poolmanager = wrap_poolmanager(adapter.poolmanager)
-
-                self._blocking_call = self._green_call
-
-            else:
-                self._blocking_call = self._thread_call
-
+        # Use asynchronous boto
+        if http_client:
+            self.session = session or get_session(loop=self._loop)
+            assert self.session._loop is self._loop, "wrong loop"
+            self._blocking_call = self._asyncio_call
+            kwargs['http_client'] = http_client
         else:
-            self._blocking_call = self._sync_call
+            self.session = session or botocore.session.get_session()
+            self._blocking_call = self._thread_call
+
+        self.client = self.session.create_client(
+            service_name, region_name=region_name,
+            endpoint_url=endpoint_url,
+            **kwargs)
+        self._botocore_api_call = self.client._make_api_call
+        self.client._make_api_call = self._make_api_call
+
+    @property
+    def _loop(self):
+        return self._green_pool._loop
+
+    @property
+    def concurrency(self):
+        if self._blocking_call == self._asyncio_call:
+            return 'asyncio'
+        else:
+            return 'thread'
+
+    def green_pool(self):
+        return self._green_pool
 
     def __getattr__(self, operation):
         return getattr(self.client, operation)
 
-    @property
-    def concurrency(self):
-        if self._blocking_call == self._thread_call:
-            return 'thread'
-        elif self._blocking_call == self._green_call:
-            return 'green'
-
-    def green_pool(self):
-        if not self._green_pool:
-            self._green_pool = GreenPool()
-        return self._green_pool
-
-    def wsgi_stream_body(self, body, n=-1):
-        '''WSGI iterator of a botocore StreamingBody
-        '''
-        return StreamingBodyWsgiIterator(body, self._blocking_call, n)
-
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
         '''Upload a file to S3 possibly using the multi-part uploader
-
         Return the key uploaded
         '''
+        assert getcurrent().parent, "Must be called from child greenlet"
         if hasattr(file, 'read'):
             if hasattr(file, 'seek'):
                 file.seek(0)
@@ -108,27 +112,44 @@ class Botocore(object):
             resp['Bucket'] = bucket
         return resp
 
-    # INTERNALS
+    def copy_storage_object(self, source_bucket, source_key, bucket, key):
+        """Copy a file from one bucket into another
+        """
+        info = self.head_object(Bucket=source_bucket, Key=source_key)
+        size = info['ContentLength']
 
-    def _make_api_call(self, operation, kwargs):
-        return self._blocking_call(self._blocking_api_call, operation, kwargs)
-
-    def _green_call(self, func, *args):
-        if getcurrent().parent:
-            return func(*args)
+        if size > MULTI_PART_SIZE:
+            return self._multipart_copy(source_bucket, source_key,
+                                        bucket, key, size)
         else:
-            pool = self.green_pool()
-            return pool.submit(func, *args)
+            return self.copy_object(
+                Bucket=bucket, Key=key,
+                CopySource=self._source_string(source_bucket, source_key)
+            )
 
+    def wsgi_stream_body(self, body, n=-1):
+        '''WSGI iterator of a botocore StreamingBody
+        '''
+        if self._green_pool:
+            return GreenWsgiIterator(body, self._blocking_call, n)
+        else:
+            raise NotImplementedError
+
+    # INTERNALS
+    def _make_api_call(self, operation, kwargs):
+        return self._blocking_call(self._botocore_api_call, operation, kwargs)
+
+    @green
+    def _asyncio_call(self, func, *args):
+        '''A call using the asyncio botocore.
+        '''
+        return func(*args)
+
+    @green
     def _thread_call(self, func, *args):
         '''A call using the event loop executor.
         '''
-        pool = self.green_pool()
-        loop = pool._loop
-        return pool.wait(loop.run_in_executor(None, func, *args))
-
-    def _sync_call(self, func, *args):
-        return func(*args)
+        return self._loop.run_in_executor(None, func, *args)
 
     def _multipart(self, filename, params):
         response = self.create_multipart_upload(**params)
@@ -160,22 +181,6 @@ class Botocore(object):
             else:
                 self.abort_multipart_upload(Bucket=bucket, Key=key,
                                             UploadId=uid)
-
-    def copy_storage_object(self, source_bucket, source_key, bucket, key):
-        info = self.head_object(Bucket=source_bucket, Key=source_key)
-        size = info['ContentLength']
-
-        if size > MULTI_PART_SIZE:
-            return self._multipart_copy(source_bucket, source_key,
-                                        bucket, key, size)
-        else:
-            return self.copy_object(
-                Bucket=bucket, Key=key,
-                CopySource=self._source_string(source_bucket, source_key)
-            )
-
-    def _source_string(self, bucket, key):
-        return '{}/{}'.format(bucket, key)
 
     def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
         response = self.create_multipart_upload(Bucket=bucket, Key=key)
@@ -210,3 +215,28 @@ class Botocore(object):
             else:
                 self.abort_multipart_upload(Bucket=bucket, Key=key,
                                             UploadId=uid)
+
+    def _source_string(self, bucket, key):
+        return '{}/{}'.format(bucket, key)
+
+
+class GreenWsgiIterator:
+    '''A pulsar compliant WSGI iterator
+    '''
+    _data = None
+
+    def __init__(self, body, blocking_call, n=-1):
+        self.body = body
+        self._blocking_call = blocking_call
+        self.n = n
+
+    def __iter__(self):
+
+        while True:
+            yield self._blocking_call(self._read_body)
+            if not self._data:
+                break
+
+    def _read_body(self):
+        self._data = self.body.read(self.n)
+        return self._data

@@ -7,9 +7,11 @@ from botocore.exceptions import ClientError
 
 from pulsar.utils.string import random_string
 from pulsar.apps.greenio import GreenPool
+from pulsar.apps.http import HttpClient
 
-from cloud import Botocore
-from cloud.pulsar_botocore import MULTI_PART_SIZE
+from cloud.greenbotocore import GreenBotocore, MULTI_PART_SIZE
+
+from .asyncbotocore import RandomFile, ONEKB, BUCKET
 
 
 def green(f):
@@ -20,51 +22,23 @@ def green(f):
     return _
 
 
-ONEKB = 2**10
-BUCKET = os.environ.get('TEST_S3_BUCKET', 'quantmind-tests')
-
-
-class RandomFile:
-    filename = None
-
-    def __init__(self, size=ONEKB):
-        self.size = size
-
-    @property
-    def key(self):
-        if self.filename:
-            return os.path.basename(self.filename)
-
-    def __enter__(self):
-        self.filename = tempfile.mktemp()
-        with open(self.filename, 'wb') as fout:
-            fout.write(os.urandom(self.size))
-        return self
-
-    def __exit__(self, *args):
-        if self.filename:
-            try:
-                os.remove(self.filename)
-            except FileNotFoundError:
-                pass
-            self.filename = None
-
-    def body(self):
-        if self.filename:
-            with open(self.filename, 'rb') as f:
-                return f.read()
-        return b''
-
-
 class BotocoreMixin:
-    _green = True
+    _http_client = True
 
     @classmethod
     def setUpClass(cls):
         cls.green_pool = GreenPool()
-        cls.ec2 = Botocore('ec2', 'us-east-1', green_pool=cls.green_pool,
-                           green=cls._green)
-        cls.s3 = Botocore('s3', green_pool=cls.green_pool, green=cls._green)
+        http = cls.http_client()
+        cls.ec2 = GreenBotocore('ec2', 'us-east-1',
+                                green_pool=cls.green_pool,
+                                http_client=http)
+        cls.s3 = GreenBotocore('s3',
+                               green_pool=cls.green_pool,
+                               http_client=http)
+
+    @classmethod
+    def http_client(cls):
+        return None
 
     def assert_status(self, response, code=200):
         meta = response['ResponseMetadata']
@@ -158,16 +132,18 @@ class BotocoreMixin:
             self.assertEqual(body, fo.read())
 
 
-class BotocoreTestGreen(BotocoreMixin, unittest.TestCase):
-
-    @green
-    def test_concurrency(self):
-        self.assertEqual(self.s3.concurrency, 'green')
-
-
 class BotocoreTestThread(BotocoreMixin, unittest.TestCase):
-    _green = False
 
-    @green
     def test_concurrency(self):
         self.assertEqual(self.s3.concurrency, 'thread')
+
+
+class BotocoreTestAsyncio(BotocoreMixin, unittest.TestCase):
+
+    @classmethod
+    def http_client(cls):
+        return HttpClient()
+
+    @green
+    def test_concurrency(self):
+        self.assertEqual(self.s3.concurrency, 'asyncio')
