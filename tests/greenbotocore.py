@@ -1,7 +1,5 @@
-import os
 import unittest
 import string
-import tempfile
 
 from botocore.exceptions import ClientError
 
@@ -11,7 +9,7 @@ from pulsar.apps.http import HttpClient
 
 from cloud.greenbotocore import GreenBotocore, MULTI_PART_SIZE
 
-from .asyncbotocore import RandomFile, ONEKB, BUCKET
+from .asyncbotocore import RandomFile, BUCKET
 
 
 def green(f):
@@ -54,6 +52,24 @@ class BotocoreMixin:
         self.assert_status(response, 204)
         self.assertRaises(ClientError, self.s3.get_object,
                           Bucket=BUCKET, Key=key)
+
+    def _test_copy(self, size):
+        with RandomFile(int(size)) as r:
+            response = self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response)
+            copy_key = 'copy_{}'.format(r.key)
+            response = self.s3.copy_storage_object(
+                BUCKET, r.key, BUCKET, copy_key)
+            self.assert_status(response)
+            self.assert_s3_equal(r.filename, copy_key)
+            self.clean_up(r.key, r.size)
+            self.clean_up(copy_key, r.size)
+
+    def assert_s3_equal(self, filename, copy_name):
+        response = self.s3.get_object(Bucket=BUCKET, Key=copy_name)
+        with open(filename, 'rb') as fo:
+            body = b''.join(self.s3.wsgi_stream_body(response['Body']))
+            self.assertEqual(body, fo.read())
 
     # TESTS
     def test_describe_instances(self):
@@ -112,30 +128,6 @@ class BotocoreMixin:
     @green
     def test_copy_large(self):
         self._test_copy(1.5*MULTI_PART_SIZE)
-
-    def _test_copy(self, size):
-        with RandomFile(int(size)) as r:
-            response = self.s3.upload_file(BUCKET, r.filename)
-            self.assert_status(response)
-            copy_key = 'copy_{}'.format(r.key)
-            response = self.s3.copy_storage_object(
-                BUCKET, r.key, BUCKET, copy_key)
-            self.assert_status(response)
-            self.assert_s3_equal(r.filename, copy_key)
-            self.clean_up(r.key, r.size)
-            self.clean_up(copy_key, r.size)
-
-    def assert_s3_equal(self, filename, copy_name):
-        response = self.s3.get_object(Bucket=BUCKET, Key=copy_name)
-        with open(filename, 'rb') as fo:
-            body = b''.join(self.s3.wsgi_stream_body(response['Body']))
-            self.assertEqual(body, fo.read())
-
-
-class BotocoreTestThread(BotocoreMixin, unittest.TestCase):
-
-    def test_concurrency(self):
-        self.assertEqual(self.s3.concurrency, 'thread')
 
 
 class BotocoreTestAsyncio(BotocoreMixin, unittest.TestCase):

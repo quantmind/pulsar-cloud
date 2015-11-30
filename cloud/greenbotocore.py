@@ -1,6 +1,5 @@
 import os
 import mimetypes
-import asyncio
 from functools import wraps
 
 import botocore.session
