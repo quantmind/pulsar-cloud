@@ -31,14 +31,14 @@ class GreenBotocore(object):
 
         # Use asynchronous boto
         if http_client:
-            self.session = session or get_session(loop=self._loop)
-            assert self.session._loop is self._loop, "wrong loop"
+            _get_session = get_session
             self._blocking_call = self._asyncio_call
-            kwargs['http_client'] = http_client
+            kwargs['http_session'] = http_client
         else:
-            self.session = session or botocore.session.get_session()
+            _get_session = botocore.session.get_session
             self._blocking_call = self._thread_call
 
+        self.session = session or _get_session()
         self.client = self.session.create_client(
             service_name, region_name=region_name,
             endpoint_url=endpoint_url,

@@ -40,18 +40,17 @@ def convert_to_response_dict(http_response, operation_model):
 
 
 class AsyncEndpoint(botocore.endpoint.Endpoint):
+
     def __init__(self, host,
                  endpoint_prefix, event_emitter, proxies=None, verify=True,
                  timeout=DEFAULT_TIMEOUT, response_parser_factory=None,
                  loop=None, http_client=None):
+        self._loop = loop or asyncio.get_event_loop()
+        self.http_client = http_client
         super().__init__(host, endpoint_prefix,
                          event_emitter, proxies=proxies, verify=verify,
                          timeout=timeout,
                          response_parser_factory=response_parser_factory)
-
-        self._loop = loop or asyncio.get_event_loop()
-        self.http_client = http_client
-        self._response_parser_factory = response_parser_factory
 
     @asyncio.coroutine
     def create_request(self, params, operation_model=None):
@@ -93,17 +92,25 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         success_response, exception = yield from self._get_response(
             request, operation_model, attempts)
 
+        while self._needs_retry(attempts, operation_model,
+                                success_response, exception):
+            attempts += 1
+            # Create a new request when retried (including a new signature).
+            request = self.create_request(
+                request_dict, operation_model=operation_model)
+            success_response, exception = self._get_response(
+                request, operation_model, attempts)
+
         if exception is not None:
             raise exception
-
-        return success_response
+        else:
+            return success_response
 
     @asyncio.coroutine
     def _get_response(self, request, operation_model, attempts):
         try:
-            resp = yield from self._request(
+            http_response = yield from self._request(
                 request.method, request.url, request.headers, request.body)
-            http_response = resp
         except ConnectionError as e:
             if self._looks_like_dns_error(e):
                 endpoint_url = request.url

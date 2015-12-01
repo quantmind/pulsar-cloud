@@ -71,6 +71,11 @@ class BotocoreMixin:
             body = b''.join(self.s3.wsgi_stream_body(response['Body']))
             self.assertEqual(body, fo.read())
 
+    @green
+    def test_copy(self):
+        self._test_copy(2**12)
+
+class d:
     # TESTS
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
