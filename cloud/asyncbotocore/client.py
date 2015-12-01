@@ -28,10 +28,10 @@ class AsyncClientCreator(botocore.client.ClientCreator):
 
         event_emitter = copy.copy(self._event_emitter)
 
-        endpoint_creator = AsyncEndpointCreator(self._endpoint_resolver,
-                                                region_name, event_emitter,
-                                                self._user_agent,
-                                                http_session=self.http_session)
+        endpoint_creator = AsyncEndpointCreator(self.http_session,
+                                                self._endpoint_resolver,
+                                                region_name,
+                                                event_emitter)
 
         endpoint = endpoint_creator.create_endpoint(
             service_model, region_name, is_secure=is_secure,
