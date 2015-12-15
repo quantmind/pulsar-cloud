@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from io import BytesIO
 
 import botocore.endpoint
 from botocore.endpoint import first_non_none_response
@@ -8,6 +9,7 @@ from botocore.exceptions import (EndpointConnectionError,
                                  BaseEndpointResolverError)
 from botocore.utils import is_valid_endpoint_url
 from botocore.awsrequest import create_request_object
+from botocore import response
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 60
@@ -28,9 +30,20 @@ def convert_to_response_dict(http_response, operation_model):
     response_dict = {
         'headers': headers,
         'status_code': http_response.status_code,
-        'body': http_response.get_content()
     }
+    if response_dict['status_code'] >= 300:
+        response_dict['body'] = yield from http_response.read()
+    elif operation_model.has_streaming_output:
+        response_dict['body'] = StreamingBody(
+            http_response, response_dict['headers'].get('content-length'))
+    else:
+        response_dict['body'] = yield from http_response.read()
+
     return response_dict
+
+
+class StreamingBody(response.StreamingBody):
+    pass
 
 
 class AsyncEndpoint(botocore.endpoint.Endpoint):
@@ -89,7 +102,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             headers = dict(self._headers(request.headers))
             http_response = yield from self.http_session.request(
                 method=request.method, url=request.url, data=request.body,
-                headers=headers)
+                headers=headers, stream=True)
         except ConnectionError as e:
             if self._looks_like_dns_error(e):
                 endpoint_url = request.url
@@ -101,7 +114,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         except Exception as e:
             return (None, e)
 
-        response_dict = convert_to_response_dict(
+        response_dict = yield from convert_to_response_dict(
             http_response, operation_model)
         parser = self._response_parser_factory.create_parser(
             operation_model.metadata['protocol'])

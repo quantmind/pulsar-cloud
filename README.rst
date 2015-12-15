@@ -25,7 +25,19 @@ Requirements
 
 Botocore
 ------------
-Asynchronous implementation of botocore_ with pulsar_ and greenlet_.
+
+This library provides two asynchornous implementations of botocore_.
+
+**Asyncio Botocore**
+
+The first implementation uses asyncio from the python standard libray only:
+
+
+** Green Botocore**
+
+The second implementation, build on top of asyncio botocore, uses
+pulsar_ and greenlet_ to obtain an implicit asynchronous behaviour.
+
 Usage:
 
 .. code:: python

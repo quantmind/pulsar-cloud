@@ -36,6 +36,17 @@ class AsyncBotocoreTest(unittest.TestCase, BotoMixin):
         response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
         self.assert_status(response, 204)
 
+    def test_upload_bytes(self):
+        with RandomFile(ONEKB) as r:
+            response = yield from self.s3.put_object(Bucket=BUCKET,
+                                                     Body=r.body(),
+                                                     Key=r.key)
+            self.assert_status(response)
+            response = yield from self.s3.get_object(Bucket=BUCKET, Key=r.key)
+            self.assert_status(response)
+            self.assertEqual(response['ContentType'], 'binary/octet-stream')
+
+class d:
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
         self.assert_status(response)
@@ -70,3 +81,4 @@ class AsyncBotocoreTest(unittest.TestCase, BotoMixin):
             self.assert_status(response)
             response = yield from self.s3.get_object(Bucket=BUCKET, Key=r.key)
             self.assert_status(response)
+            self.assertEqual(response['ContentType'], 'binary/octet-stream')
