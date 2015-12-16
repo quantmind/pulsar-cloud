@@ -4,8 +4,8 @@ import logging
 
 import botocore.endpoint
 from botocore.endpoint import get_environ_proxies
-from botocore.exceptions import EndpointConnectionError, \
-    BaseEndpointResolverError
+from botocore.exceptions import (EndpointConnectionError,
+                                 BaseEndpointResolverError)
 from botocore.utils import is_valid_endpoint_url
 from botocore.awsrequest import create_request_object
 
