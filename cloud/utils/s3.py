@@ -1,9 +1,6 @@
 import os
 import mimetypes
 
-from pulsar.apps.greenio import getcurrent
-
-
 # 8MB for multipart uploads
 MULTI_PART_SIZE = 2**23
 
@@ -15,7 +12,6 @@ class S3tools:
         '''Upload a file to S3 possibly using the multi-part uploader
         Return the key uploaded
         '''
-        assert getcurrent().parent, "Must be called from child greenlet"
         if hasattr(file, 'read'):
             if hasattr(file, 'seek'):
                 file.seek(0)
@@ -44,14 +40,14 @@ class S3tools:
             params['ContentType'] = ContentType
 
         if size > MULTI_PART_SIZE and is_file:
-            resp = self._multipart(file, params)
+            resp = yield from self._multipart(file, params)
         elif is_file:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
-            resp = self.put_object(**params)
+            resp = yield from self.put_object(**params)
         else:
             params['Body'] = file
-            resp = self.put_object(**params)
+            resp = yield from self.put_object(**params)
         if 'Key' not in resp:
             resp['Key'] = key
         if 'Bucket' not in resp:
@@ -61,20 +57,22 @@ class S3tools:
     def copy_storage_object(self, source_bucket, source_key, bucket, key):
         """Copy a file from one bucket into another
         """
-        info = self.head_object(Bucket=source_bucket, Key=source_key)
+        info = yield from self.head_object(Bucket=source_bucket,
+                                           Key=source_key)
         size = info['ContentLength']
 
         if size > MULTI_PART_SIZE:
-            return self._multipart_copy(source_bucket, source_key,
-                                        bucket, key, size)
+            result = yield from self._multipart_copy(source_bucket, source_key,
+                                                     bucket, key, size)
         else:
-            return self.copy_object(
+            result = yield from self.copy_object(
                 Bucket=bucket, Key=key,
                 CopySource=self._source_string(source_bucket, source_key)
             )
+        return result
 
     def _multipart(self, filename, params):
-        response = self.create_multipart_upload(**params)
+        response = yield from self.create_multipart_upload(**params)
         bucket = params['Bucket']
         key = params['Key']
         uid = response['UploadId']
@@ -93,7 +91,8 @@ class S3tools:
                     part = self.upload_part(**params)
                     parts.append(dict(ETag=part['ETag'], PartNumber=num))
         except:
-            self.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=uid)
+            yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                   UploadId=uid)
             raise
         else:
             if parts:

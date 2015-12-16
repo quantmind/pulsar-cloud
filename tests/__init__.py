@@ -35,10 +35,3 @@ class RandomFile:
             with open(self.filename, 'rb') as f:
                 return f.read()
         return b''
-
-
-class BotoMixin:
-
-    def assert_status(self, response, code=200):
-        meta = response['ResponseMetadata']
-        self.assertEqual(meta['HTTPStatusCode'], code)

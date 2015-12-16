@@ -32,13 +32,14 @@ def convert_to_response_dict(http_response, operation_model):
     }
     raw = http_response.raw
     if response_dict['status_code'] >= 300:
-        response_dict['body'] = yield from raw.read()
+        body = yield from raw.read()
     elif operation_model.has_streaming_output:
-        response_dict['body'] = StreamingBody(
-            raw, response_dict['headers'].get('content-length'))
+        cl = response_dict['headers'].get('content-length')
+        body = StreamingBody(raw, cl)
     else:
-        response_dict['body'] = yield from raw.read()
+        body = yield from raw.read()
 
+    response_dict['body'] = body
     return response_dict
 
 
@@ -114,7 +115,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             headers = dict(self._headers(request.headers))
             http_response = yield from self.http_session.request(
                 method=request.method, url=request.url, data=request.body,
-                headers=headers, stream=True)
+                headers=headers)
         except ConnectionError as e:
             if self._looks_like_dns_error(e):
                 endpoint_url = request.url
