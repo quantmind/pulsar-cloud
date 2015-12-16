@@ -5,6 +5,7 @@ from pulsar.apps.http import HttpClient
 from pulsar.utils.string import random_string
 
 from cloud.asyncbotocore.session import get_session
+from cloud.asyncbotocore.endpoint import StreamingBody
 
 from . import BotoMixin, RandomFile, BUCKET, ONEKB
 
@@ -36,17 +37,6 @@ class AsyncBotocoreTest(unittest.TestCase, BotoMixin):
         response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
         self.assert_status(response, 204)
 
-    def test_upload_bytes(self):
-        with RandomFile(ONEKB) as r:
-            response = yield from self.s3.put_object(Bucket=BUCKET,
-                                                     Body=r.body(),
-                                                     Key=r.key)
-            self.assert_status(response)
-            response = yield from self.s3.get_object(Bucket=BUCKET, Key=r.key)
-            self.assert_status(response)
-            self.assertEqual(response['ContentType'], 'binary/octet-stream')
-
-class d:
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()
         self.assert_status(response)
@@ -82,3 +72,9 @@ class d:
             response = yield from self.s3.get_object(Bucket=BUCKET, Key=r.key)
             self.assert_status(response)
             self.assertEqual(response['ContentType'], 'binary/octet-stream')
+            body = response['Body']
+            self.assertIsInstance(body, StreamingBody)
+            data = yield from body.read()
+            self.assertTrue(data)
+            data = yield from body.read()
+            self.assertFalse(data)
