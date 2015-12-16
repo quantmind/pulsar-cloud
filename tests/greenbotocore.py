@@ -9,7 +9,7 @@ from pulsar.apps.http import HttpClient
 
 from cloud.greenbotocore import GreenBotocore, MULTI_PART_SIZE
 
-from .asyncbotocore import RandomFile, BUCKET
+from . import BotoMixin, RandomFile, BUCKET
 
 
 def green(f):
@@ -20,7 +20,7 @@ def green(f):
     return _
 
 
-class BotocoreMixin:
+class BotocoreMixin(BotoMixin):
     _http_client = True
 
     @classmethod
@@ -37,10 +37,6 @@ class BotocoreMixin:
     @classmethod
     def http_client(cls):
         return None
-
-    def assert_status(self, response, code=200):
-        meta = response['ResponseMetadata']
-        self.assertEqual(meta['HTTPStatusCode'], code)
 
     def clean_up(self, key, size):
         response = self.s3.head_object(Bucket=BUCKET, Key=key)
@@ -71,11 +67,6 @@ class BotocoreMixin:
             body = b''.join(self.s3.wsgi_stream_body(response['Body']))
             self.assertEqual(body, fo.read())
 
-    @green
-    def test_copy(self):
-        self._test_copy(2**12)
-
-class d:
     # TESTS
     def test_describe_instances(self):
         response = yield from self.ec2.describe_instances()

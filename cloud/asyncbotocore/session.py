@@ -1,11 +1,6 @@
-import asyncio
-
 import botocore.session
 import botocore.credentials
 from botocore import utils, retryhandler, translate
-from botocore.loaders import create_loader
-from botocore.parsers import ResponseParserFactory
-from botocore import credentials as botocredentials
 import botocore.regions
 
 from .client import AsyncClientCreator
@@ -13,6 +8,11 @@ from .hooks import AsyncHierarchicalEmitter
 
 
 class AsyncSession(botocore.session.Session):
+
+    def __init__(self, event_hooks=None, **kw):
+        if event_hooks is None:
+            event_hooks = AsyncHierarchicalEmitter()
+        super().__init__(event_hooks=event_hooks, **kw)
 
     def create_client(self, service_name, region_name=None, api_version=None,
                       use_ssl=True, verify=None, endpoint_url=None,
@@ -40,14 +40,15 @@ class AsyncSession(botocore.session.Session):
             credentials = self.get_credentials()
         endpoint_resolver = self.get_component('endpoint_resolver')
 
-        client_creator = AsyncClientCreator(http_session,
+        client_creator = AsyncClientCreator(
+            http_session,
             loader, endpoint_resolver, self.user_agent(), event_emitter,
             retryhandler, translate, response_parser_factory)
-        client = client_creator.create_client(
+
+        return client_creator.create_client(
             service_name, region_name, use_ssl, endpoint_url, verify,
             credentials, scoped_config=self.get_scoped_config(),
             client_config=config)
-        return client
 
 
 def get_session(env_vars=None):
