@@ -12,23 +12,24 @@ class S3tools:
         '''Upload a file to S3 possibly using the multi-part uploader
         Return the key uploaded
         '''
+        is_filename = False
+
         if hasattr(file, 'read'):
             if hasattr(file, 'seek'):
                 file.seek(0)
             file = file.read()
-
-        is_file = False
-        if not isinstance(file, str):
+            size = len(file)
+        elif key:
             size = len(file)
         else:
-            is_file = True
+            is_filename = True
             size = os.stat(file).st_size
-            if not key:
-                key = os.path.basename(file)
-            if not ContentType:
-                ContentType, _ = mimetypes.guess_type(file)
+            key = os.path.basename(file)
 
         assert key, 'key not available'
+
+        if not ContentType:
+            ContentType, _ = mimetypes.guess_type(key)
 
         if uploadpath:
             if not uploadpath.endswith('/'):
@@ -39,9 +40,9 @@ class S3tools:
         if ContentType:
             params['ContentType'] = ContentType
 
-        if size > MULTI_PART_SIZE and is_file:
+        if size > MULTI_PART_SIZE and is_filename:
             resp = yield from self._multipart(file, params)
-        elif is_file:
+        elif is_filename:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
             resp = yield from self.put_object(**params)

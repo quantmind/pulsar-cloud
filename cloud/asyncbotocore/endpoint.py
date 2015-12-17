@@ -115,7 +115,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             headers = dict(self._headers(request.headers))
             http_response = yield from self.http_session.request(
                 method=request.method, url=request.url, data=request.body,
-                headers=headers)
+                headers=headers, stream=True)
         except ConnectionError as e:
             if self._looks_like_dns_error(e):
                 endpoint_url = request.url
