@@ -88,23 +88,25 @@ class S3tools:
                     num = len(parts) + 1
                     params['Body'] = body
                     params['PartNumber'] = num
-                    part = self.upload_part(**params)
+                    part = yield from self.upload_part(**params)
                     parts.append(dict(ETag=part['ETag'], PartNumber=num))
-        except:
+        except Exception:
             yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
                                                    UploadId=uid)
             raise
         else:
             if parts:
-                all = dict(Parts=parts)
-                return self.complete_multipart_upload(
-                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=all)
+                bits = dict(Parts=parts)
+                result = yield from self.complete_multipart_upload(
+                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
+                return result
             else:
-                self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                            UploadId=uid)
+                yield from self.abort_multipart_upload(
+                    Bucket=bucket, Key=key, UploadId=uid)
 
     def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
-        response = self.create_multipart_upload(Bucket=bucket, Key=key)
+        response = yield from self.create_multipart_upload(Bucket=bucket,
+                                                           Key=key)
         start = 0
         parts = []
         num = 1
@@ -120,22 +122,24 @@ class S3tools:
                 end = min(size, start + MULTI_PART_SIZE)
                 params['PartNumber'] = num
                 params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
-                part = self.upload_part_copy(**params)
+                part = yield from self.upload_part_copy(**params)
                 parts.append(dict(
                     ETag=part['CopyPartResult']['ETag'], PartNumber=num))
                 start = end
                 num += 1
         except:
-            self.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=uid)
+            yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                   UploadId=uid)
             raise
         else:
             if parts:
-                all = dict(Parts=parts)
-                return self.complete_multipart_upload(
-                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=all)
+                bits = dict(Parts=parts)
+                result = yield from self.complete_multipart_upload(
+                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
+                return result
             else:
-                self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                            UploadId=uid)
+                yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                       UploadId=uid)
 
     def _source_string(self, bucket, key):
         return '{}/{}'.format(bucket, key)

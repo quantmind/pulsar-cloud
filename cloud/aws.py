@@ -15,15 +15,15 @@ class AsyncioBotocore(S3tools):
                  **kwargs):
         if not http_session:
             http_session = HttpClient(loop=self._loop)
-        self.session = get_session()
-        self.client = self.session.create_client(
+        self._session = get_session()
+        self._client = self._session.create_client(
             service_name, region_name=region_name,
             endpoint_url=endpoint_url,
             http_session=http_session,
             **kwargs)
 
     def __getattr__(self, operation):
-        return getattr(self.client, operation)
+        return getattr(self._client, operation)
 
 
 class GreenBotocore:
@@ -53,9 +53,9 @@ class GreenApiCall:
         client = self.green_client._client
         result = yield from getattr(client, self.operation)(*args, **kwargs)
         if isinstance(result, dict):
-            body = result.get('body')
+            body = result.get('Body')
             if isinstance(body, StreamingBody):
-                result['body'] = GreenBody(body)
+                result['Body'] = GreenBody(body)
         return result
 
 

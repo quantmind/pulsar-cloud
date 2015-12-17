@@ -30,14 +30,14 @@ def convert_to_response_dict(http_response, operation_model):
         'headers': headers,
         'status_code': http_response.status_code,
     }
-    raw = http_response.raw
-    if response_dict['status_code'] >= 300:
-        body = yield from raw.read()
-    elif operation_model.has_streaming_output:
+    if (response_dict['status_code'] < 300 and
+            operation_model.has_streaming_output):
         cl = response_dict['headers'].get('content-length')
-        body = StreamingBody(raw, cl)
+        body = StreamingBody(http_response.raw, cl)
     else:
-        body = yield from raw.read()
+        # TODO: we need a common API for waiting for body
+        yield from http_response.on_finished
+        body = http_response.content
 
     response_dict['body'] = body
     return response_dict

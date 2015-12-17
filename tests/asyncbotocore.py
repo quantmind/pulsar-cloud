@@ -65,11 +65,6 @@ class BotocoreMixin:
 
 class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
 
-    @green
-    def test_copy(self):
-        self._test_copy(2**12)
-
-class d:
     def test_green_callable(self):
         call = self.ec2.describe_instances
         self.assertEqual(str(call), 'describe_instances')
