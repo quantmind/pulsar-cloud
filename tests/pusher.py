@@ -12,7 +12,7 @@ class PusherTest(unittest.TestCase):
 
     @classmethod
     def newPusher(cls):
-        from cloud import Pusher
+        from cloud.pusher import Pusher
         cfg = cls.cfg.params
         app_id = cfg.get('PUSHER_APP_ID', os.environ.get('PUSHER_APP_ID'))
         app_key = cfg.get('PUSHER_APP_KEY', os.environ.get('PUSHER_APP_KEY'))

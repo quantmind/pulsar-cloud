@@ -1,2 +1,1 @@
-* Asynchronous Botocore
-* Pusher application
+* Asynchronous green botocore can use threads or asyncio as asynchronous mechanism

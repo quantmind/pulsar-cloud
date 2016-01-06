@@ -1,32 +1,27 @@
 import asyncio
 import logging
 
-from botocore.hooks import HierarchicalEmitter, _PrefixTrie
+from botocore.hooks import HierarchicalEmitter
 
 
 logger = logging.getLogger(__name__)
 
 
 class AsyncHierarchicalEmitter(HierarchicalEmitter):
-    def __init__(self):
-        super().__init__()
-
-        # We keep a reference to the handlers for quick
-        # read only access (we never modify self._handlers).
-        # A cache of event name to handler list.
-        self._lookup_cache = {}
-        self._handlers = _PrefixTrie()
-        # This is used to ensure that unique_id's are only
-        # registered once.
-        self._unique_id_handlers = {}
 
     @asyncio.coroutine
     def _emit(self, event_name, kwargs, stop_on_response=False):
+        responses = []
+        # Invoke the event handlers from most specific
+        # to least specific, each time stripping off a dot.
         handlers_to_call = self._lookup_cache.get(event_name)
         if handlers_to_call is None:
             handlers_to_call = self._handlers.prefix_search(event_name)
             self._lookup_cache[event_name] = handlers_to_call
         elif not handlers_to_call:
+            # Short circuit and return an empty response is we have
+            # no handlers to call.  This is the common case where
+            # for the majority of signals, nothing is listening.
             return []
         kwargs['event_name'] = event_name
         responses = []
@@ -39,20 +34,6 @@ class AsyncHierarchicalEmitter(HierarchicalEmitter):
             if stop_on_response and response is not None:
                 return responses
         return responses
-
-    @asyncio.coroutine
-    def emit(self, event_name, **kwargs):
-        """
-        Emit an event by name with arguments passed as keyword args.
-
-            >>> responses = yield from emitter.emit(
-            ...     'my-event.service.operation', arg1='one', arg2='two')
-
-        :rtype: list
-        :return: List of (handler, response) tuples from all processed
-                 handlers.
-        """
-        return (yield from self._emit(event_name, kwargs))
 
     @asyncio.coroutine
     def emit_until_response(self, event_name, **kwargs):
