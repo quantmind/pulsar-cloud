@@ -32,8 +32,15 @@ This library provides two asynchornous implementations of botocore_.
 
 The first implementation uses asyncio from the python standard libray only:
 
+.. code:: python
 
-** Green Botocore**
+    from cloud.aws import AsyncioBotocore
+    
+    s3 = AsyncioBotocore('s3', 'us-east-1')
+    s3 = yield from s3.put_object(...)
+    
+
+**Green Botocore**
 
 The second implementation, build on top of asyncio botocore, uses
 pulsar_ and greenlet_ to obtain an implicit asynchronous behaviour.
@@ -42,10 +49,15 @@ Usage:
 
 .. code:: python
 
-    from cloud import Botocore
+    from cloud.aws import GreenBotocore
+    from pulsar.apps.greenio import GreenPool
 
-    ec2 = Botocore('ec2', 'us-east-1')
-    ec2.describe_spot_price_history()
+    def execute():
+        s3 = GreenBotocore('s3', 'us-east-1')
+        ec2.put_object(...)
+        
+    pool = GreenPool()
+    yield from pool.submit(execute)
 
 
 Pusher
