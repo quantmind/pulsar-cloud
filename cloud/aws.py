@@ -14,7 +14,7 @@ class AsyncioBotocore(S3tools):
                  session=None, http_session=None,
                  **kwargs):
         if not http_session:
-            http_session = HttpClient(loop=self._loop)
+            http_session = HttpClient(loop=loop)
         self._session = get_session()
         self._client = self._session.create_client(
             service_name, region_name=region_name,
