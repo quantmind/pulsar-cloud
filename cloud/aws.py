@@ -22,6 +22,16 @@ class AsyncioBotocore(S3tools):
             http_session=http_session,
             **kwargs)
 
+    @property
+    def endpoint(self):
+        return self._client._endpoint
+
+    @property
+    def http_session(self):
+        '''HTTP session object
+        '''
+        return self.endpoint.http_session
+
     def __getattr__(self, operation):
         return getattr(self._client, operation)
 
@@ -31,6 +41,12 @@ class GreenBotocore:
     '''
     def __init__(self, service_name, **kwargs):
         self._client = AsyncioBotocore(service_name, **kwargs)
+
+    @property
+    def http_session(self):
+        '''HTTP session object
+        '''
+        return self._client.http_session
 
     def __getattr__(self, operation):
         return GreenApiCall(operation, self)

@@ -1,6 +1,7 @@
 import unittest
 import string
 import json
+import asyncio
 
 from pulsar.apps.http import HttpClient
 from pulsar.apps.greenio import GreenPool
@@ -67,6 +68,12 @@ class BotocoreMixin:
 
 
 class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
+
+    def test_no_http_session(self):
+        cli = GreenBotocore('s3')
+        self.assertTrue(cli._client)
+        self.assertIsInstance(cli.http_session, HttpClient)
+        self.assertEqual(cli.http_session._loop, asyncio.get_event_loop())
 
     def test_green_callable(self):
         call = self.ec2.describe_instances
