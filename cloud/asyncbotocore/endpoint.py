@@ -1,4 +1,3 @@
-import os
 import asyncio
 import logging
 
@@ -12,12 +11,6 @@ from botocore import response
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 60
-
-
-def _get_verify_value(verify):
-    if verify is not None:
-        return verify
-    return os.environ.get('REQUESTS_CA_BUNDLE', True)
 
 
 def convert_to_response_dict(http_response, operation_model):
