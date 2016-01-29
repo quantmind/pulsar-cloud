@@ -1,3 +1,4 @@
+import os
 import unittest
 import string
 import json
@@ -164,3 +165,13 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
             self.assert_s3_equal(filename, copy_key)
             self._clean_up(key, size)
             self._clean_up(copy_key, size)
+
+    @green
+    def test_upload_folder(self):
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            'releases')
+        result = self.s3.upload_folder(BUCKET, path)
+        self.assertTrue(result)
+        self.assertFalse(result['failures'])
+        self.assertTrue(result['files'])
+        self.assertTrue(result['total_size'])

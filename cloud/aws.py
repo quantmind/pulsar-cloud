@@ -23,6 +23,10 @@ class AsyncioBotocore(S3tools):
             **kwargs)
 
     @property
+    def _loop(self):
+        return self._client._loop
+
+    @property
     def endpoint(self):
         return self._client._endpoint
 
@@ -41,6 +45,10 @@ class GreenBotocore:
     '''
     def __init__(self, service_name, **kwargs):
         self._client = AsyncioBotocore(service_name, **kwargs)
+
+    @property
+    def _loop(self):
+        return self._client._loop
 
     @property
     def http_session(self):

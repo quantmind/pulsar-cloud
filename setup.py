@@ -35,6 +35,7 @@ def run(argv=None):
           description=mod.__doc__,
           install_requires=requirements(),
           packages=find_packages(),
+          scripts=['bin/s3upload.py'],
           classifiers=['Development Status :: 3 - Alpha',
                        'Environment :: Plugins',
                        'Intended Audience :: Developers',

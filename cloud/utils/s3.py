@@ -1,17 +1,33 @@
+"""Utilities for S3 storage
+"""
 import os
 import mimetypes
+import logging
+import asyncio
+
+from pulsar.utils.system import convert_bytes
 
 # 8MB for multipart uploads
 MULTI_PART_SIZE = 2**23
+LOGGER = logging.getLogger('cloud.s3')
+
+
+def skip_file(filename):
+    if filename.startswith('.') or filename.startswith('_'):
+        return True
+
+
+def s3_key(key):
+    return key.replace('\\', '/')
 
 
 class S3tools:
 
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
-        '''Upload a file to S3 possibly using the multi-part uploader
+        """Upload a file to S3 possibly using the multi-part uploader
         Return the key uploaded
-        '''
+        """
         is_filename = False
 
         if hasattr(file, 'read'):
@@ -72,6 +88,18 @@ class S3tools:
             )
         return result
 
+    def upload_folder(self, bucket, folder, key=None):
+        """Recursively upload a ``folder`` into a backet.
+
+        :param bucket: bucket where to upload the folder to
+        :param folder: the folder location in the local file system
+        :param key: Optional key where the folder is uploaded
+        :return:
+        """
+        uploader = FolderUploader(self, bucket, folder, key)
+        return uploader.start()
+
+    # INTERNALS
     def _multipart(self, filename, params):
         response = yield from self.create_multipart_upload(**params)
         bucket = params['Bucket']
@@ -144,3 +172,71 @@ class S3tools:
 
     def _source_string(self, bucket, key):
         return '{}/{}'.format(bucket, key)
+
+
+class FolderUploader:
+    """Utility class to recursively upload a folder to S3
+    """
+    def __init__(self, botocore, bucket, folder, key=None):
+        self.botocore = botocore
+        self.bucket = bucket
+        self.folder = folder
+        self.all = {}
+        self.failures = {}
+        self.success = {}
+        self.total_size = 0
+        self.total_files = 0
+        if not os.path.isdir(folder):
+            raise ValueError('%s not a folder' % folder)
+        if not key:
+            base, key = os.path.split(folder)
+            if not key:
+                key = os.path.basename(base)
+        if not key:
+            raise ValueError('Could not calculate key from "%s"' % folder)
+        self.key = key
+
+    @property
+    def _loop(self):
+        return self.botocore._loop
+
+    def start(self):
+        # Loop through all files and upload
+        futures = []
+        for dirpath, _, filenames in os.walk(self.folder):
+            for filename in filenames:
+                if skip_file(filename):
+                    continue
+                full_path = os.path.join(dirpath, filename)
+                futures.append(self._upload_file(full_path))
+                self.all[full_path] = os.stat(full_path).st_size
+        self.total_files = len(self.all)
+        yield from asyncio.gather(*futures, loop=self._loop)
+        failures = len(self.failures)
+        total_files = self.total_files - failures
+        LOGGER.info('Uploaded %d files for a total of %s. %d failures',
+                    total_files, convert_bytes(self.total_size), failures)
+        return dict(failures=self.failures,
+                    files=self.success,
+                    total_size=self.total_size)
+
+    def _upload_file(self, full_path):
+        """Coroutine for uploading a single file
+        """
+        rel_path = os.path.relpath(full_path, self.folder)
+        key = s3_key(os.path.join(self.key, rel_path))
+        with open(full_path, 'rb') as fp:
+            file = fp.read()
+        try:
+            yield from self.botocore.upload_file(self.bucket, file, key=key)
+        except Exception as exc:
+            LOGGER.error('Could not upload "%s": %s', key, exc)
+            self.failures[key] = self.all.pop(full_path)
+            return
+        size = self.all.pop(full_path)
+        self.success[key] = size
+        self.total_size += size
+        percentage = 100*(1 - len(self.all)/self.total_files)
+        message = '{0:.0f}% completed - uploaded "{1}" - {2}'.format(
+            percentage, key, convert_bytes(size))
+        LOGGER.info(message)

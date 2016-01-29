@@ -94,6 +94,10 @@ class AsyncClientCreator(botocore.client.ClientCreator):
 
 class AsyncBaseClient(botocore.client.BaseClient):
 
+    @property
+    def _loop(self):
+        return self._endpoint._loop
+
     @asyncio.coroutine
     def _make_api_call(self, operation_name, api_params):
         operation_model = self._service_model.operation_model(operation_name)

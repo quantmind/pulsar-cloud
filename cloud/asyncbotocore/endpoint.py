@@ -58,6 +58,10 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
         super().__init__(*args, **kw)
         self.http_session = http_session
 
+    @property
+    def _loop(self):
+        return self.http_session._loop
+
     @asyncio.coroutine
     def create_request(self, params, operation_model=None):
         request = create_request_object(params)
