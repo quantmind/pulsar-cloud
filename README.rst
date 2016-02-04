@@ -13,7 +13,7 @@ Pulsar Cloud
 .. _master-build: http://travis-ci.org/quantmind/pulsar-cloud
 .. |coverage-master| image:: https://coveralls.io/repos/quantmind/pulsar-cloud/badge.svg?branch=master&service=github
   :target: https://coveralls.io/github/quantmind/pulsar-cloud?branch=master
-  
+
 Requirements
 ---------------
 
@@ -35,10 +35,10 @@ The first implementation uses asyncio from the python standard libray only:
 .. code:: python
 
     from cloud.aws import AsyncioBotocore
-    
+
     s3 = AsyncioBotocore('s3', 'us-east-1')
     s3 = yield from s3.put_object(...)
-    
+
 
 **Green Botocore**
 
@@ -55,9 +55,16 @@ Usage:
     def execute():
         s3 = GreenBotocore('s3', 'us-east-1')
         ec2.put_object(...)
-        
+
     pool = GreenPool()
     yield from pool.submit(execute)
+
+
+**S3 uploader script**
+
+Usage:
+
+    s3upload <path> bucket/my/location
 
 
 Pusher
