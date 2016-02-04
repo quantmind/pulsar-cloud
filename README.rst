@@ -62,9 +62,9 @@ Usage:
 
 **S3 uploader script**
 
-Usage:
+Usage::
 
-    s3upload <path> bucket/my/location
+    s3upload <path> -b bucket/my/location
 
 
 Pusher
