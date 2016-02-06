@@ -1,11 +1,10 @@
-import os
-
-from agile.release import ReleaseManager
+from agile import AgileManager
 
 
-version_file = os.path.join(os.path.dirname(__file__),
-                            'cloud', '__init__.py')
+app_module = 'cloud'
+note_file = 'docs/notes.md'
+docs_bucket = 'quantmind-docs'
 
 
 if __name__ == '__main__':
-    ReleaseManager(config='release.py').start()
+    AgileManager(config='release.py').start()

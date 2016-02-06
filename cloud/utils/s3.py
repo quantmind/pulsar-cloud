@@ -88,15 +88,20 @@ class S3tools:
             )
         return result
 
-    def upload_folder(self, bucket, folder, key=None):
+    def upload_folder(self, bucket, folder, key=None, skip=None,
+                      content_types=None):
         """Recursively upload a ``folder`` into a backet.
 
         :param bucket: bucket where to upload the folder to
         :param folder: the folder location in the local file system
         :param key: Optional key where the folder is uploaded
-        :return:
+        :param skip: Optional list of files to skip
+        :param content_types: Optional dictionary mapping suffixes to
+            content types
+        :return: a coroutine
         """
-        uploader = FolderUploader(self, bucket, folder, key)
+        uploader = FolderUploader(self, bucket, folder, key, skip,
+                                  content_types)
         return uploader.start()
 
     # INTERNALS
@@ -177,7 +182,8 @@ class S3tools:
 class FolderUploader:
     """Utility class to recursively upload a folder to S3
     """
-    def __init__(self, botocore, bucket, folder, key=None):
+    def __init__(self, botocore, bucket, folder, key=None, skip=None,
+                 content_types=None):
         self.botocore = botocore
         self.bucket = bucket
         self.folder = folder
@@ -186,6 +192,8 @@ class FolderUploader:
         self.success = {}
         self.total_size = 0
         self.total_files = 0
+        self.skip = set(skip or ())
+        self.content_types = content_types or {}
         if not os.path.isdir(folder):
             raise ValueError('%s not a folder' % folder)
         if not key:
@@ -205,7 +213,7 @@ class FolderUploader:
         futures = []
         for dirpath, _, filenames in os.walk(self.folder):
             for filename in filenames:
-                if skip_file(filename):
+                if skip_file(filename) or filename in self.skip:
                     continue
                 full_path = os.path.join(dirpath, filename)
                 futures.append(self._upload_file(full_path))
@@ -225,10 +233,12 @@ class FolderUploader:
         """
         rel_path = os.path.relpath(full_path, self.folder)
         key = s3_key(os.path.join(self.key, rel_path))
+        ct = self.content_types.get(key.split('.')[-1])
         with open(full_path, 'rb') as fp:
             file = fp.read()
         try:
-            yield from self.botocore.upload_file(self.bucket, file, key=key)
+            yield from self.botocore.upload_file(self.bucket, file, key=key,
+                                                 ContentType=ct)
         except Exception as exc:
             LOGGER.error('Could not upload "%s": %s', key, exc)
             self.failures[key] = self.all.pop(full_path)
