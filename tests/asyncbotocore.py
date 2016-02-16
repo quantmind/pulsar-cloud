@@ -169,7 +169,7 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
     @green
     def test_upload_folder(self):
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                            'releases')
+                            'docs', 'history')
         result = self.s3.upload_folder(BUCKET, path)
         self.assertTrue(result)
         self.assertFalse(result['failures'])
