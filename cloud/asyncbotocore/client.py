@@ -119,7 +119,10 @@ class AsyncBaseClient(botocore.client.BaseClient):
         return parsed_response
 
     @asyncio.coroutine
-    def _convert_to_request_dict(self, api_params, operation_model):
+    def _convert_to_request_dict(self, api_params, operation_model,
+                                 context=None):
+        if not context:
+            context = {}
         # Given the API params provided by the user and the operation_model
         # we can serialize the request to a request_dict.
         operation_name = operation_model.name
@@ -132,7 +135,7 @@ class AsyncBaseClient(botocore.client.BaseClient):
             'provide-client-params.{endpoint_prefix}.{operation_name}'.format(
                 endpoint_prefix=self._service_model.endpoint_prefix,
                 operation_name=operation_name),
-            params=api_params, model=operation_model)
+            params=api_params, model=operation_model, context=context)
         api_params = first_non_none_response(responses, default=api_params)
 
         event_name = (
@@ -141,7 +144,7 @@ class AsyncBaseClient(botocore.client.BaseClient):
             event_name.format(
                 endpoint_prefix=self._service_model.endpoint_prefix,
                 operation_name=operation_name),
-            params=api_params, model=operation_model)
+            params=api_params, model=operation_model, context=context)
 
         request_dict = self._serializer.serialize_to_request(
             api_params, operation_model)
