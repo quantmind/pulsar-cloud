@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 60
 
 
+@asyncio.coroutine
 def convert_to_response_dict(http_response, operation_model):
     headers = http_response.headers
 
@@ -132,6 +133,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
                                              operation_model.output_shape)),
                 None)
 
+    @asyncio.coroutine
     def _needs_retry(self, attempts, operation_model, response=None,
                      caught_exception=None):
         event_name = 'needs-retry.%s.%s' % (self._endpoint_prefix,

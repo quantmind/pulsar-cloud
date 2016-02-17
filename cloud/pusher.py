@@ -44,6 +44,7 @@ class PusherChannel(object):
         self.path = '/apps/%s/channels/%s/events' % (self.pusher.app_id,
                                                      quote(self.name))
 
+    @asyncio.coroutine
     def trigger(self, event, data=None, socket_id=None):
         '''Trigger an ``event`` on this channel
         '''
@@ -112,6 +113,7 @@ class Pusher(ws.WS):
             self._channels[name] = self.channel_type(name, self)
         return self._channels[name]
 
+    @asyncio.coroutine
     def connect(self):
         '''Connect to a Pusher websocket
         '''
@@ -130,6 +132,7 @@ class Pusher(ws.WS):
                 yield from waiter
         return self._consumer
 
+    @asyncio.coroutine
     def subscribe(self, channel, data=None, auth=None):
         msg = {'channel': channel}
         if auth:
@@ -141,6 +144,7 @@ class Pusher(ws.WS):
         return channel
 
     # INTERNALS
+    @asyncio.coroutine
     def execute(self, event, data):
         websocket = yield from self.connect()
         websocket.write(json.dumps({'event': event,

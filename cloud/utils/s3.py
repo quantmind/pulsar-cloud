@@ -23,6 +23,7 @@ def s3_key(key):
 
 class S3tools:
 
+    @asyncio.coroutine
     def upload_file(self, bucket, file, uploadpath=None, key=None,
                     ContentType=None, **kw):
         """Upload a file to S3 possibly using the multi-part uploader
@@ -71,6 +72,7 @@ class S3tools:
             resp['Bucket'] = bucket
         return resp
 
+    @asyncio.coroutine
     def copy_storage_object(self, source_bucket, source_key, bucket, key):
         """Copy a file from one bucket into another
         """
@@ -105,6 +107,7 @@ class S3tools:
         return uploader.start()
 
     # INTERNALS
+    @asyncio.coroutine
     def _multipart(self, filename, params):
         response = yield from self.create_multipart_upload(**params)
         bucket = params['Bucket']
@@ -138,6 +141,7 @@ class S3tools:
                 yield from self.abort_multipart_upload(
                     Bucket=bucket, Key=key, UploadId=uid)
 
+    @asyncio.coroutine
     def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
         response = yield from self.create_multipart_upload(Bucket=bucket,
                                                            Key=key)
@@ -208,6 +212,7 @@ class FolderUploader:
     def _loop(self):
         return self.botocore._loop
 
+    @asyncio.coroutine
     def start(self):
         # Loop through all files and upload
         futures = []
@@ -228,6 +233,7 @@ class FolderUploader:
                     files=self.success,
                     total_size=self.total_size)
 
+    @asyncio.coroutine
     def _upload_file(self, full_path):
         """Coroutine for uploading a single file
         """
