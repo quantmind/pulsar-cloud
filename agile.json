@@ -1,0 +1,14 @@
+{
+    "github": {
+        "cloud": {
+            "python_module": "cloud",
+            "version": "cloud.__version__"
+        }
+    },
+    "tasks": {
+        "release": {
+            "description": "make a new release to github",
+            "command": ["github"]
+        }
+    }
+}

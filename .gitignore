@@ -10,6 +10,7 @@
 .coveralls-repo-token
 .coverage
 htmlcov
+release-notes.md
 
 #python
 pulsar_cloud.egg-info
