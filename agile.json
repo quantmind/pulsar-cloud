@@ -2,7 +2,8 @@
     "github": {
         "cloud": {
             "python_module": "cloud",
-            "version": "cloud.__version__"
+            "version": "cloud.__version__",
+            "release_notes": "docs/history"
         }
     },
     "tasks": {
