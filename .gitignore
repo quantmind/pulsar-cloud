@@ -20,4 +20,3 @@ pulsar_pusher.egg-info
 build
 _build
 dist
-config.py

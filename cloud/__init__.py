@@ -1,16 +1,6 @@
-"""Asynchronous clients for AWS and Pusher
-"""
-import os
+"""Asynchronous clients for AWS and Pusher"""
+from .utils.version import get_version
 
-VERSION = (0, 4, 4, 'final', 0)
+VERSION = (0, 5, 0, 'alpha', 0)
 
-__version__ = '.'.join((str(v) for v in VERSION))
-__author__ = "Luca Sbardella"
-__contact__ = "luca@quantmind.com"
-__homepage__ = "https://github.com/quantmind/pulsar-cloud"
-
-
-if os.environ.get('pulsar_cloud_setup') != 'yes':
-    from pulsar.utils.version import get_version
-
-    __version__ = get_version(VERSION)
+__version__ = get_version(VERSION, __file__)

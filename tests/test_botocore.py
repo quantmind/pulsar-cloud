@@ -11,7 +11,7 @@ from pulsar.utils.string import random_string
 from cloud.aws import GreenBotocore
 from cloud.utils.s3 import MULTI_PART_SIZE
 
-from . import RandomFile, BUCKET
+from tests import RandomFile, BUCKET
 
 
 def green(f):
