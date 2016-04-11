@@ -1,5 +1,3 @@
-import asyncio
-
 from pulsar.apps.http import HttpClient
 from pulsar.apps.greenio import wait
 
@@ -75,10 +73,9 @@ class GreenApiCall:
     def __call__(self, *args, **kwargs):
         return wait(self._wrap_body(args, kwargs))
 
-    @asyncio.coroutine
-    def _wrap_body(self, args, kwargs):
+    async def _wrap_body(self, args, kwargs):
         client = self.green_client._client
-        result = yield from getattr(client, self.operation)(*args, **kwargs)
+        result = await getattr(client, self.operation)(*args, **kwargs)
         if isinstance(result, dict):
             body = result.get('Body')
             if isinstance(body, StreamingBody):

@@ -6,7 +6,7 @@ import subprocess
 
 
 test_modules = ['tests']
-test_timeout = 30
+test_timeout = 60
 
 
 def setup(params, package=None):

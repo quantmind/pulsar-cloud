@@ -23,9 +23,8 @@ def s3_key(key):
 
 class S3tools:
 
-    @asyncio.coroutine
-    def upload_file(self, bucket, file, uploadpath=None, key=None,
-                    ContentType=None, **kw):
+    async def upload_file(self, bucket, file, uploadpath=None, key=None,
+                          ContentType=None, **kw):
         """Upload a file to S3 possibly using the multi-part uploader
         Return the key uploaded
         """
@@ -54,37 +53,39 @@ class S3tools:
             key = '%s%s' % (uploadpath, key)
 
         params = dict(Bucket=bucket, Key=key)
-        if ContentType:
-            params['ContentType'] = ContentType
+
+        if not ContentType:
+            ContentType = 'application/octet-stream'
+
+        params['ContentType'] = ContentType
 
         if size > MULTI_PART_SIZE and is_filename:
-            resp = yield from self._multipart(file, params)
+            resp = await self._multipart(file, params)
         elif is_filename:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
-            resp = yield from self.put_object(**params)
+            resp = await self.put_object(**params)
         else:
             params['Body'] = file
-            resp = yield from self.put_object(**params)
+            resp = await self.put_object(**params)
         if 'Key' not in resp:
             resp['Key'] = key
         if 'Bucket' not in resp:
             resp['Bucket'] = bucket
         return resp
 
-    @asyncio.coroutine
-    def copy_storage_object(self, source_bucket, source_key, bucket, key):
+    async def copy_storage_object(self, source_bucket, source_key,
+                                  bucket, key):
         """Copy a file from one bucket into another
         """
-        info = yield from self.head_object(Bucket=source_bucket,
-                                           Key=source_key)
+        info = await self.head_object(Bucket=source_bucket, Key=source_key)
         size = info['ContentLength']
 
         if size > MULTI_PART_SIZE:
-            result = yield from self._multipart_copy(source_bucket, source_key,
-                                                     bucket, key, size)
+            result = await self._multipart_copy(source_bucket, source_key,
+                                                bucket, key, size)
         else:
-            result = yield from self.copy_object(
+            result = await self.copy_object(
                 Bucket=bucket, Key=key,
                 CopySource=self._source_string(source_bucket, source_key)
             )
@@ -107,9 +108,8 @@ class S3tools:
         return uploader.start()
 
     # INTERNALS
-    @asyncio.coroutine
-    def _multipart(self, filename, params):
-        response = yield from self.create_multipart_upload(**params)
+    async def _multipart(self, filename, params):
+        response = await self.create_multipart_upload(**params)
         bucket = params['Bucket']
         key = params['Key']
         uid = response['UploadId']
@@ -125,26 +125,25 @@ class S3tools:
                     num = len(parts) + 1
                     params['Body'] = body
                     params['PartNumber'] = num
-                    part = yield from self.upload_part(**params)
+                    part = await self.upload_part(**params)
                     parts.append(dict(ETag=part['ETag'], PartNumber=num))
         except Exception:
-            yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                                   UploadId=uid)
+            await self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                              UploadId=uid)
             raise
         else:
             if parts:
                 bits = dict(Parts=parts)
-                result = yield from self.complete_multipart_upload(
+                result = await self.complete_multipart_upload(
                     Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
                 return result
             else:
-                yield from self.abort_multipart_upload(
+                await self.abort_multipart_upload(
                     Bucket=bucket, Key=key, UploadId=uid)
 
-    @asyncio.coroutine
-    def _multipart_copy(self, source_bucket, source_key, bucket, key, size):
-        response = yield from self.create_multipart_upload(Bucket=bucket,
-                                                           Key=key)
+    async def _multipart_copy(self, source_bucket, source_key, bucket,
+                              key, size):
+        response = await self.create_multipart_upload(Bucket=bucket, Key=key)
         start = 0
         parts = []
         num = 1
@@ -160,24 +159,24 @@ class S3tools:
                 end = min(size, start + MULTI_PART_SIZE)
                 params['PartNumber'] = num
                 params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
-                part = yield from self.upload_part_copy(**params)
+                part = await self.upload_part_copy(**params)
                 parts.append(dict(
                     ETag=part['CopyPartResult']['ETag'], PartNumber=num))
                 start = end
                 num += 1
         except:
-            yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                                   UploadId=uid)
+            await self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                              UploadId=uid)
             raise
         else:
             if parts:
                 bits = dict(Parts=parts)
-                result = yield from self.complete_multipart_upload(
+                result = await self.complete_multipart_upload(
                     Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
                 return result
             else:
-                yield from self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                                       UploadId=uid)
+                await self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                                  UploadId=uid)
 
     def _source_string(self, bucket, key):
         return '{}/{}'.format(bucket, key)
@@ -212,8 +211,7 @@ class FolderUploader:
     def _loop(self):
         return self.botocore._loop
 
-    @asyncio.coroutine
-    def start(self):
+    async def start(self):
         # Loop through all files and upload
         futures = []
         for dirpath, _, filenames in os.walk(self.folder):
@@ -224,7 +222,7 @@ class FolderUploader:
                 futures.append(self._upload_file(full_path))
                 self.all[full_path] = os.stat(full_path).st_size
         self.total_files = len(self.all)
-        yield from asyncio.gather(*futures, loop=self._loop)
+        await asyncio.gather(*futures, loop=self._loop)
         failures = len(self.failures)
         total_files = self.total_files - failures
         LOGGER.info('Uploaded %d files for a total of %s. %d failures',
@@ -233,8 +231,7 @@ class FolderUploader:
                     files=self.success,
                     total_size=self.total_size)
 
-    @asyncio.coroutine
-    def _upload_file(self, full_path):
+    async def _upload_file(self, full_path):
         """Coroutine for uploading a single file
         """
         rel_path = os.path.relpath(full_path, self.folder)
@@ -243,8 +240,8 @@ class FolderUploader:
         with open(full_path, 'rb') as fp:
             file = fp.read()
         try:
-            yield from self.botocore.upload_file(self.bucket, file, key=key,
-                                                 ContentType=ct)
+            await self.botocore.upload_file(self.bucket, file, key=key,
+                                            ContentType=ct)
         except Exception as exc:
             LOGGER.error('Could not upload "%s": %s', key, exc)
             self.failures[key] = self.all.pop(full_path)

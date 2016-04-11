@@ -27,10 +27,15 @@ class BotocoreMixin:
     @classmethod
     def setUpClass(cls):
         cls.green_pool = GreenPool()
-        kwargs = dict(http_session=HttpClient(),
+        cls.sessions = HttpClient()
+        kwargs = dict(http_session=cls.sessions,
                       region_name='us-east-1')
         cls.ec2 = GreenBotocore('ec2', **kwargs)
         cls.s3 = GreenBotocore('s3', **kwargs)
+
+    @classmethod
+    def tearDownClass(cls):
+        return cls.sessions.close()
 
     def assert_status(self, response, code=200):
         meta = response['ResponseMetadata']
@@ -49,7 +54,7 @@ class BotocoreMixin:
         self.assert_status(response)
         self.assertEqual(response['ContentLength'], size)
         # Delete
-        response = yield from self.s3.delete_object(Bucket=BUCKET, Key=key)
+        response = self.s3.delete_object(Bucket=BUCKET, Key=key)
         self.assert_status(response, 204)
         # self.assertRaises(ClientError, self.s3.get_object,
         #                   Bucket=BUCKET, Key=key)
@@ -89,6 +94,7 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
     def test_describe_spot_price_history(self):
         response = self.ec2.describe_spot_price_history()
         self.assert_status(response)
+        self.assertIsInstance(response['SpotPriceHistory'], list)
 
     @green
     def test_upload_text(self):

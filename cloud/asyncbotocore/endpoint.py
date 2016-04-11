@@ -3,18 +3,17 @@ import logging
 
 import botocore.endpoint
 from botocore.endpoint import first_non_none_response
-from botocore.exceptions import (EndpointConnectionError,
-                                 BaseEndpointResolverError)
+from botocore.exceptions import EndpointConnectionError, ConnectionClosedError
 from botocore.utils import is_valid_endpoint_url
 from botocore.awsrequest import create_request_object
 from botocore import response
+
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 60
 
 
-@asyncio.coroutine
-def convert_to_response_dict(http_response, operation_model):
+async def convert_to_response_dict(http_response, operation_model):
     headers = http_response.headers
 
     if not isinstance(headers, dict):
@@ -30,7 +29,7 @@ def convert_to_response_dict(http_response, operation_model):
         body = StreamingBody(http_response.raw, cl)
     else:
         # TODO: we need a common API for waiting for body
-        yield from http_response.on_finished
+        await http_response.on_finished
         body = http_response.content
 
     response_dict['body'] = body
@@ -63,82 +62,90 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
     def _loop(self):
         return self.http_session._loop
 
-    @asyncio.coroutine
-    def create_request(self, params, operation_model=None):
+    async def create_request(self, params, operation_model=None):
         request = create_request_object(params)
         if operation_model:
             event_name = 'request-created.{endpoint_prefix}.{op_name}'.format(
                 endpoint_prefix=self._endpoint_prefix,
                 op_name=operation_model.name)
-            yield from self._event_emitter.emit(
+            await self._event_emitter.async_emit(
                 event_name,
                 request=request,
                 operation_name=operation_model.name)
         prepared_request = self.prepare_request(request)
         return prepared_request
 
-    @asyncio.coroutine
-    def _send_request(self, request_dict, operation_model):
-        '''
-        headers = request_dict['headers']
-        for key in headers.keys():
-            if key.lower().startswith('content-type'):
-                break
-        else:
-            request_dict['headers']['Content-Type'] = \
-                'application/octet-stream'
-        '''
-        attempts = 0
-        retry = True
-
-        while retry:
+    async def _send_request(self, request_dict, operation_model):
+        attempts = 1
+        request = await self.create_request(request_dict, operation_model)
+        success_response, exception = await self._get_response(
+            request, operation_model, attempts)
+        while await self._needs_retry(attempts, operation_model,
+                                      success_response, exception):
             attempts += 1
-            request = yield from self.create_request(request_dict,
-                                                     operation_model)
-
-            success_response, exception = yield from self._get_response(
+            # If there is a stream associated with the request, we need
+            # to reset it before attempting to send the request again.
+            # This will ensure that we resend the entire contents of the
+            # body.
+            request.reset_stream()
+            # Create a new request when retried (including a new signature).
+            request = await self.create_request(
+                request_dict, operation_model=operation_model)
+            success_response, exception = await self._get_response(
                 request, operation_model, attempts)
-
-            retry = yield from self._needs_retry(attempts, operation_model,
-                                                 success_response, exception)
-
         if exception is not None:
             raise exception
         else:
             return success_response
 
-    @asyncio.coroutine
-    def _get_response(self, request, operation_model, attempts):
+    async def _get_response(self, request, operation_model, attempts):
+        # This will return a tuple of (success_response, exception)
+        # and success_response is itself a tuple of
+        # (http_response, parsed_dict).
+        # If an exception occurs then the success_response is None.
+        # If no exception occurs then exception is None.
         try:
+            logger.debug("Sending http request: %s", request)
             headers = dict(self._headers(request.headers))
-            http_response = yield from self.http_session.request(
+            http_response = await self.http_session.request(
                 method=request.method, url=request.url, data=request.body,
-                headers=headers, stream=True)
+                headers=headers, stream=True, verify=self.verify)
         except ConnectionError as e:
+            # For a connection error, if it looks like it's a DNS
+            # lookup issue, 99% of the time this is due to a misconfigured
+            # region/endpoint so we'll raise a more specific error message
+            # to help users.
+            logger.debug("ConnectionError received when sending HTTP request.",
+                         exc_info=True)
             if self._looks_like_dns_error(e):
-                endpoint_url = request.url
+                endpoint_url = e.request.url
                 better_exception = EndpointConnectionError(
                     endpoint_url=endpoint_url, error=e)
+                return (None, better_exception)
+            elif self._looks_like_bad_status_line(e):
+                better_exception = ConnectionClosedError(
+                    endpoint_url=e.request.url, request=e.request)
                 return (None, better_exception)
             else:
                 return (None, e)
         except Exception as e:
+            logger.debug("Exception received when sending HTTP request.",
+                         exc_info=True)
             return (None, e)
-
-        response_dict = yield from convert_to_response_dict(
-            http_response, operation_model)
+        # This returns the http_response and the parsed_data.
+        response_dict = await convert_to_response_dict(http_response,
+                                                       operation_model)
         parser = self._response_parser_factory.create_parser(
             operation_model.metadata['protocol'])
-        return ((http_response, parser.parse(response_dict,
-                                             operation_model.output_shape)),
+        return ((http_response,
+                 parser.parse(response_dict, operation_model.output_shape)),
                 None)
 
-    @asyncio.coroutine
-    def _needs_retry(self, attempts, operation_model, response=None,
-                     caught_exception=None):
+    async def _needs_retry(self, attempts, operation_model, response=None,
+                           caught_exception=None):
         event_name = 'needs-retry.%s.%s' % (self._endpoint_prefix,
                                             operation_model.name)
-        responses = yield from self._event_emitter.emit(
+        responses = await self._event_emitter.async_emit(
             event_name, response=response, endpoint=self,
             operation=operation_model, attempts=attempts,
             caught_exception=caught_exception)
@@ -150,7 +157,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             # for the specified number of times.
             logger.debug("Response received to retry, sleeping for "
                          "%s seconds", handler_response)
-            yield from asyncio.sleep(handler_response)
+            await asyncio.sleep(handler_response)
             return True
 
     def _headers(self, headers):
@@ -169,40 +176,14 @@ class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
     def create_endpoint(self, service_model, region_name=None, is_secure=True,
                         endpoint_url=None, verify=None,
                         response_parser_factory=None, timeout=DEFAULT_TIMEOUT):
-        if region_name is None:
-            region_name = self._configured_region
-        # Use the endpoint resolver heuristics to build the endpoint url.
-        scheme = 'https' if is_secure else 'http'
-        try:
-            endpoint = self._endpoint_resolver.construct_endpoint(
-                service_model.endpoint_prefix,
-                region_name, scheme=scheme)
-        except BaseEndpointResolverError:
-            if endpoint_url is not None:
-                # If the user provides an endpoint_url, it's ok
-                # if the heuristics didn't find anything.  We use the
-                # user provided endpoint_url.
-                endpoint = {'uri': endpoint_url, 'properties': {}}
-            else:
-                raise
-
-        if endpoint_url is not None:
-            # If the user provides an endpoint url, we'll use that
-            # instead of what the heuristics rule gives us.
-            final_endpoint_url = endpoint_url
-        else:
-            final_endpoint_url = endpoint['uri']
-        if not is_valid_endpoint_url(final_endpoint_url):
-            raise ValueError("Invalid endpoint: %s" % final_endpoint_url)
-
-        proxies = self._get_proxies(final_endpoint_url)
-        verify_value = self._get_verify_value(verify)
+        if not is_valid_endpoint_url(endpoint_url):
+            raise ValueError("Invalid endpoint: %s" % endpoint_url)
         return AsyncEndpoint(
             self.http_session,
-            final_endpoint_url,
+            endpoint_url,
             endpoint_prefix=service_model.endpoint_prefix,
             event_emitter=self._event_emitter,
-            proxies=proxies,
-            verify=verify_value,
+            proxies=self._get_proxies(endpoint_url),
+            verify=self._get_verify_value(verify),
             timeout=timeout,
             response_parser_factory=response_parser_factory)
