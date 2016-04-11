@@ -44,8 +44,7 @@ class PusherChannel(object):
         self.path = '/apps/%s/channels/%s/events' % (self.pusher.app_id,
                                                      quote(self.name))
 
-    @asyncio.coroutine
-    def trigger(self, event, data=None, socket_id=None):
+    async def trigger(self, event, data=None, socket_id=None):
         '''Trigger an ``event`` on this channel
         '''
         json_data = json.dumps(data, cls=self.pusher.encoder)
@@ -53,7 +52,7 @@ class PusherChannel(object):
         signed_path = "%s?%s" % (self.path, query_string)
         pusher = self.pusher
         absolute_url = pusher.get_absolute_path(signed_path)
-        response = yield from pusher.http.post(
+        response = await pusher.http.post(
             absolute_url, data=json_data,
             headers=[('Content-Type', 'application/json')])
         response.raise_for_status()
@@ -113,8 +112,7 @@ class Pusher(ws.WS):
             self._channels[name] = self.channel_type(name, self)
         return self._channels[name]
 
-    @asyncio.coroutine
-    def connect(self):
+    async def connect(self):
         '''Connect to a Pusher websocket
         '''
         if not self._consumer:
@@ -122,31 +120,29 @@ class Pusher(ws.WS):
             try:
                 address = self._websocket_host()
                 self.logger.info('Connect to %s', address)
-                self._consumer = yield from self.http.get(address)
+                self._consumer = await self.http.get(address)
                 if self._consumer.status_code != 101:
                     raise PusherError("Could not connect to websocket")
             except Exception as exc:
                 waiter.set_exception(exc)
                 raise
             else:
-                yield from waiter
+                await waiter
         return self._consumer
 
-    @asyncio.coroutine
-    def subscribe(self, channel, data=None, auth=None):
+    async def subscribe(self, channel, data=None, auth=None):
         msg = {'channel': channel}
         if auth:
             pass
         if data:
             msg['channel_data'] = data
         channel = self[channel]
-        yield from self.execute(PUSHER_SUBSCRIBE, msg)
+        await self.execute(PUSHER_SUBSCRIBE, msg)
         return channel
 
     # INTERNALS
-    @asyncio.coroutine
-    def execute(self, event, data):
-        websocket = yield from self.connect()
+    async def execute(self, event, data):
+        websocket = await self.connect()
         websocket.write(json.dumps({'event': event,
                                     'data': data}))
 

@@ -43,7 +43,7 @@ class PusherTest(unittest.TestCase):
         self.assertEqual(channel.pusher, pusher)
         self.assertEqual(channel, pusher['test_channel'])
 
-    def test_bind(self):
+    async def test_bind(self):
         pusher = self.pusher
 
         def test_data(data, event=None):
@@ -55,11 +55,10 @@ class PusherTest(unittest.TestCase):
             else:
                 future.set_result(None)
 
-        channel = yield from pusher.subscribe('test_channel2')
+        channel = await pusher.subscribe('test_channel2')
         channel.bind('hello', test_data)
 
         future = asyncio.Future()
-        result = yield from channel.trigger('hello',
-                                            {'message': 'Hello world'})
+        result = await channel.trigger('hello', {'message': 'Hello world'})
         self.assertEqual(result, True)
-        yield from future
+        await future
