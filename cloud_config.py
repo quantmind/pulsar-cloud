@@ -5,10 +5,6 @@ import json
 import subprocess
 
 
-test_modules = ['tests']
-test_timeout = 60
-
-
 def setup(params, package=None):
     if package:
         path = os.path.dirname(__file__)
