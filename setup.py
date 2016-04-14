@@ -1,6 +1,10 @@
+import os
+import sys
+
 from setuptools import setup, find_packages
 
-import config
+sys.path.insert(0, os.path.dirname(__file__))
+config = __import__('config')
 
 
 def run():
@@ -12,6 +16,7 @@ def run():
         url="https://github.com/quantmind/pulsar-cloud",
         zip_safe=False,
         license='BSD',
+        long_description=config.read('README.rst'),
         setup_requires=['pulsar'],
         install_requires=config.requirements('requirements.txt')[0],
         packages=find_packages(include=['cloud', 'cloud.*']),
