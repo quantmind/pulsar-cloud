@@ -22,7 +22,8 @@ def s3_key(key):
 
 
 class S3tools:
-
+    """Mixin with additional s3 methods
+    """
     async def upload_file(self, bucket, file, uploadpath=None, key=None,
                           ContentType=None, **kw):
         """Upload a file to S3 possibly using the multi-part uploader
@@ -60,7 +61,7 @@ class S3tools:
         params['ContentType'] = ContentType
 
         if size > MULTI_PART_SIZE and is_filename:
-            resp = await self._multipart(file, params)
+            resp = await _multipart(self, file, params)
         elif is_filename:
             with open(file, 'rb') as fp:
                 params['Body'] = fp.read()
@@ -82,12 +83,12 @@ class S3tools:
         size = info['ContentLength']
 
         if size > MULTI_PART_SIZE:
-            result = await self._multipart_copy(source_bucket, source_key,
-                                                bucket, key, size)
+            result = await _multipart_copy(self, source_bucket, source_key,
+                                           bucket, key, size)
         else:
             result = await self.copy_object(
                 Bucket=bucket, Key=key,
-                CopySource=self._source_string(source_bucket, source_key)
+                CopySource=_source_string(source_bucket, source_key)
             )
         return result
 
@@ -107,79 +108,82 @@ class S3tools:
                                   content_types)
         return uploader.start()
 
-    # INTERNALS
-    async def _multipart(self, filename, params):
-        response = await self.create_multipart_upload(**params)
-        bucket = params['Bucket']
-        key = params['Key']
-        uid = response['UploadId']
-        params['UploadId'] = uid
-        params.pop('ContentType', None)
-        try:
-            parts = []
-            with open(filename, 'rb') as file:
-                while True:
-                    body = file.read(MULTI_PART_SIZE)
-                    if not body:
-                        break
-                    num = len(parts) + 1
-                    params['Body'] = body
-                    params['PartNumber'] = num
-                    part = await self.upload_part(**params)
-                    parts.append(dict(ETag=part['ETag'], PartNumber=num))
-        except Exception:
-            await self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                              UploadId=uid)
-            raise
-        else:
-            if parts:
-                bits = dict(Parts=parts)
-                result = await self.complete_multipart_upload(
-                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
-                return result
-            else:
-                await self.abort_multipart_upload(
-                    Bucket=bucket, Key=key, UploadId=uid)
 
-    async def _multipart_copy(self, source_bucket, source_key, bucket,
-                              key, size):
-        response = await self.create_multipart_upload(Bucket=bucket, Key=key)
-        start = 0
+# INTERNALS
+async def _multipart(self, filename, params):
+    response = await self.create_multipart_upload(**params)
+    bucket = params['Bucket']
+    key = params['Key']
+    uid = response['UploadId']
+    params['UploadId'] = uid
+    params.pop('ContentType', None)
+    try:
         parts = []
-        num = 1
-        uid = response['UploadId']
-        params = {
-            'CopySource': self._source_string(source_bucket, source_key),
-            'Bucket': bucket,
-            'Key': key,
-            'UploadId': uid
-        }
-        try:
-            while start < size:
-                end = min(size, start + MULTI_PART_SIZE)
+        with open(filename, 'rb') as file:
+            while True:
+                body = file.read(MULTI_PART_SIZE)
+                if not body:
+                    break
+                num = len(parts) + 1
+                params['Body'] = body
                 params['PartNumber'] = num
-                params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
-                part = await self.upload_part_copy(**params)
-                parts.append(dict(
-                    ETag=part['CopyPartResult']['ETag'], PartNumber=num))
-                start = end
-                num += 1
-        except:
+                part = await self.upload_part(**params)
+                parts.append(dict(ETag=part['ETag'], PartNumber=num))
+    except Exception:
+        await self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                          UploadId=uid)
+        raise
+    else:
+        if parts:
+            bits = dict(Parts=parts)
+            result = await self.complete_multipart_upload(
+                Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
+            return result
+        else:
+            await self.abort_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=uid)
+
+
+async def _multipart_copy(self, source_bucket, source_key, bucket,
+                          key, size):
+    response = await self.create_multipart_upload(Bucket=bucket, Key=key)
+    start = 0
+    parts = []
+    num = 1
+    uid = response['UploadId']
+    params = {
+        'CopySource': _source_string(source_bucket, source_key),
+        'Bucket': bucket,
+        'Key': key,
+        'UploadId': uid
+    }
+    try:
+        while start < size:
+            end = min(size, start + MULTI_PART_SIZE)
+            params['PartNumber'] = num
+            params['CopySourceRange'] = 'bytes={}-{}'.format(start, end-1)
+            part = await self.upload_part_copy(**params)
+            parts.append(dict(
+                ETag=part['CopyPartResult']['ETag'], PartNumber=num))
+            start = end
+            num += 1
+    except:
+        await self.abort_multipart_upload(Bucket=bucket, Key=key,
+                                          UploadId=uid)
+        raise
+    else:
+        if parts:
+            bits = dict(Parts=parts)
+            result = await self.complete_multipart_upload(
+                Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
+            return result
+        else:
             await self.abort_multipart_upload(Bucket=bucket, Key=key,
                                               UploadId=uid)
-            raise
-        else:
-            if parts:
-                bits = dict(Parts=parts)
-                result = await self.complete_multipart_upload(
-                    Bucket=bucket, UploadId=uid, Key=key, MultipartUpload=bits)
-                return result
-            else:
-                await self.abort_multipart_upload(Bucket=bucket, Key=key,
-                                                  UploadId=uid)
 
-    def _source_string(self, bucket, key):
-        return '{}/{}'.format(bucket, key)
+
+def _source_string(bucket, key):
+    return '{}/{}'.format(bucket, key)
 
 
 class FolderUploader:

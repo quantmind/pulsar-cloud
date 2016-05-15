@@ -75,6 +75,14 @@ class BotocoreMixin:
 
 class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
 
+    @green
+    def test_upload_binary_large(self):
+        with RandomFile(int(1.5*MULTI_PART_SIZE)) as r:
+            response = self.s3.upload_file(BUCKET, r.filename)
+            self.assert_status(response)
+            self._clean_up(r.key, r.size)
+
+class d:
     def test_no_http_session(self):
         cli = GreenBotocore('s3')
         self.assertTrue(cli._client)

@@ -28,7 +28,6 @@ class AsyncHierarchicalEmitter(HierarchicalEmitter):
             # for the majority of signals, nothing is listening.
             return []
         kwargs['event_name'] = event_name
-        responses = []
         need_to_wait = False
         for handler in handlers_to_call:
             logger.debug('Event %s: calling handler %s', event_name, handler)
