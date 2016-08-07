@@ -59,6 +59,16 @@ class BotocoreMixin:
         # self.assertRaises(ClientError, self.s3.get_object,
         #                   Bucket=BUCKET, Key=key)
 
+    def _create_object(self, key, body):
+        response = self.s3.put_object(Bucket=BUCKET, Body=body,
+                                      ContentType='text/plain',
+                                      Key=key)
+        self.assert_status(response)
+        return response
+
+    def _green_sleep(self, sleep):
+        self.green_pool.wait(asyncio.sleep(sleep))
+
     def _test_copy(self, size):
         # Must be run with green decorated function
         with RandomFile(int(size)) as r:
@@ -71,6 +81,15 @@ class BotocoreMixin:
             self.assert_s3_equal(r.filename, copy_key)
             self._clean_up(r.key, r.size)
             self._clean_up(copy_key, r.size)
+
+    def _fetch_all(self, pages):
+        responses = []
+        while True:
+            n = pages.next_page()
+            if n is None:
+                break
+            responses.append(n)
+        return responses
 
 
 class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
@@ -181,3 +200,21 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         self.assertFalse(result['failures'])
         self.assertTrue(result['files'])
         self.assertTrue(result['total_size'])
+
+    @green
+    def test_can_paginate(self):
+        name = random_string()
+        for i in range(5):
+            key_name = '%s/key%d' % (name, i)
+            self._create_object(key_name, 'bla')
+
+        # Eventual consistency.
+        self._green_sleep(3)
+        paginator = self.s3.get_paginator('list_objects')
+        pages = paginator.paginate(MaxKeys=1, Bucket=BUCKET, Prefix=name)
+        responses = self._fetch_all(pages)
+
+        self.assertEqual(len(responses), 5)
+        for i, el in enumerate(responses):
+            key = el['Contents'][0]['Key']
+            self.assertEqual(key, '%s/key%d' % (name, i))

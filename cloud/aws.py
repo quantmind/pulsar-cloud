@@ -39,31 +39,50 @@ class AsyncioBotocore(S3tools):
         return getattr(self._client, operation)
 
 
-class GreenBotocore:
+class GreenProxy:
+
+    def __init__(self, client):
+        self.client = client
+
+    def __getattr__(self, operation):
+        return GreenApiCall(operation, self.client)
+
+
+class GreenBotocore(GreenProxy):
     '''High level Asynchornous botocore wrapper for greenlet
     '''
     def __init__(self, service_name, **kwargs):
-        self._client = AsyncioBotocore(service_name, **kwargs)
-
-    @property
-    def _loop(self):
-        return self._client._loop
+        super().__init__(AsyncioBotocore(service_name, **kwargs))
 
     @property
     def http_session(self):
         '''HTTP session object
         '''
-        return self._client.http_session
+        return self.client.http_session
 
-    def __getattr__(self, operation):
-        return GreenApiCall(operation, self)
+    def get_paginator(self, operation_name):
+        return GreenPaginator(self.client.get_paginator(operation_name))
+
+
+class GreenIterator(GreenProxy):
+    '''A pulsar compliant WSGI iterator
+    '''
+    def __iter__(self):
+        for data in self.client:
+            yield wait(data)
+
+
+class GreenPaginator(GreenProxy):
+
+    def paginate(self, *args, **kwargs):
+        return GreenIterator(self.client.paginate(*args, **kwargs))
 
 
 class GreenApiCall:
 
-    def __init__(self, operation, green_client):
+    def __init__(self, operation, client):
         self.operation = operation
-        self.green_client = green_client
+        self.client = client
 
     def __repr__(self):
         return self.operation
@@ -73,24 +92,9 @@ class GreenApiCall:
         return wait(self._wrap_body(args, kwargs))
 
     async def _wrap_body(self, args, kwargs):
-        client = self.green_client._client
-        result = await getattr(client, self.operation)(*args, **kwargs)
+        result = await getattr(self.client, self.operation)(*args, **kwargs)
         if isinstance(result, dict):
             body = result.get('Body')
             if body is not None and not isinstance(body, bytes):
-                result['Body'] = GreenBody(body)
+                result['Body'] = GreenIterator(body)
         return result
-
-
-class GreenBody:
-    '''A pulsar compliant WSGI iterator
-    '''
-    def __init__(self, body):
-        self.body = body
-
-    def read(self):
-        return wait(self.body.read())
-
-    def __iter__(self):
-        for data in self.body:
-            yield wait(data)
