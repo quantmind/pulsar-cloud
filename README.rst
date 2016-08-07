@@ -1,6 +1,7 @@
 Pulsar Cloud
 ================
 
+:Badges: |license|  |pyversions| |status| |pypiversion|
 :Master CI: |master-build|_ |coverage-master|
 :Downloads: http://pypi.python.org/pypi/pulsar-cloud
 :Source: https://github.com/quantmind/pulsar-cloud
@@ -9,6 +10,14 @@ Pulsar Cloud
 :Platforms: Linux, OSX, Windows. Python 3.5 and above
 :Keywords: amazon, aws, botocore, pusher, websocket, async, pulsar, greenlet
 
+.. |pypiversion| image:: https://badge.fury.io/py/pulsar-cloud.svg
+    :target: https://pypi.python.org/pypi/pulsar-cloud
+.. |pyversions| image:: https://img.shields.io/pypi/pyversions/pulsar-cloud.svg
+  :target: https://pypi.python.org/pypi/pulsar-cloud
+.. |license| image:: https://img.shields.io/pypi/l/pulsar-cloud.svg
+  :target: https://pypi.python.org/pypi/pulsar-cloud
+.. |status| image:: https://img.shields.io/pypi/status/pulsar-cloud.svg
+  :target: https://pypi.python.org/pypi/pulsar-cloud
 .. |master-build| image:: https://travis-ci.org/quantmind/pulsar-cloud.svg?branch=master
 .. _master-build: http://travis-ci.org/quantmind/pulsar-cloud
 .. |coverage-master| image:: https://coveralls.io/repos/quantmind/pulsar-cloud/badge.svg?branch=master&service=github

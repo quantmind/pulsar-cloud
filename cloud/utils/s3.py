@@ -127,8 +127,9 @@ async def _multipart(self, filename, params):
                 num = len(parts) + 1
                 params['Body'] = body
                 params['PartNumber'] = num
-                part = await self.upload_part(**params)
-                parts.append(dict(ETag=part['ETag'], PartNumber=num))
+                result = await self.upload_part(**params)
+                part = result['ResponseMetadata']['HTTPHeaders']
+                parts.append(dict(ETag=part['Etag'], PartNumber=num))
     except Exception:
         await self.abort_multipart_upload(Bucket=bucket, Key=key,
                                           UploadId=uid)
