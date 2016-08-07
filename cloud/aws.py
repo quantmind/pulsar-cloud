@@ -1,8 +1,7 @@
 from pulsar.apps.http import HttpClient
 from pulsar.apps.greenio import wait
 
-from .asyncbotocore.endpoint import StreamingBody
-from .asyncbotocore.session import get_session
+from .asyncbotocore import get_session
 from .utils.s3 import S3tools
 
 
@@ -78,7 +77,7 @@ class GreenApiCall:
         result = await getattr(client, self.operation)(*args, **kwargs)
         if isinstance(result, dict):
             body = result.get('Body')
-            if isinstance(body, StreamingBody):
+            if body is not None and not isinstance(body, bytes):
                 result['Body'] = GreenBody(body)
         return result
 

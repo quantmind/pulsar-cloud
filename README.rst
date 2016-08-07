@@ -6,7 +6,7 @@ Pulsar Cloud
 :Source: https://github.com/quantmind/pulsar-cloud
 :Mailing list: `google user group`_
 :Design by: `Quantmind`_ and `Luca Sbardella`_
-:Platforms: Linux, OSX, Windows. Python 3.4 and above
+:Platforms: Linux, OSX, Windows. Python 3.5 and above
 :Keywords: amazon, aws, botocore, pusher, websocket, async, pulsar, greenlet
 
 .. |master-build| image:: https://travis-ci.org/quantmind/pulsar-cloud.svg?branch=master
@@ -17,7 +17,7 @@ Pulsar Cloud
 Requirements
 ---------------
 
-* Python 3.4 or above
+* Python 3.5 or above
 * pulsar_
 * botocore_
 * greenlet_
@@ -27,6 +27,8 @@ Botocore
 ------------
 
 This library provides two asynchornous implementations of botocore_.
+
+Some part of the module are taken from aiobotocore_ - `apache LICENSE <https://github.com/aio-libs/aiobotocore/blob/master/LICENSE>`_.
 
 **Asyncio Botocore**
 
@@ -94,3 +96,4 @@ Subscribe to a channel as a client
 .. _pulsar: https://github.com/quantmind/pulsar
 .. _botocore: https://github.com/boto/botocore
 .. _greenlet: https://greenlet.readthedocs.org/en/latest/
+.. _aiobotocore: https://github.com/aio-libs/aiobotocore

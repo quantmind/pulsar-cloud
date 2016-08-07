@@ -3,12 +3,14 @@ import copy
 import botocore.client
 import botocore.serialize
 import botocore.parsers
-from botocore.exceptions import ClientError
-from botocore.hooks import first_non_none_response
-from botocore.awsrequest import prepare_request_dict
+from botocore.exceptions import ClientError, OperationNotPageableError
+from botocore.signers import RequestSigner
+from botocore.utils import get_service_module_name
+from botocore.paginate import Paginator
 
 from .endpoint import AsyncEndpointCreator
-from .signers import AsyncRequestSigner
+from .config import AsyncConfig
+from .paginate import AsyncPageIterator
 
 
 class AsyncClientCreator(botocore.client.ClientCreator):
@@ -17,23 +19,27 @@ class AsyncClientCreator(botocore.client.ClientCreator):
         super().__init__(*args, **kw)
         self.http_session = http_session
 
+    @property
+    def _loop(self):
+        return self.http_session._loop
+
     def _get_client_args(self, service_model, region_name, is_secure,
                          endpoint_url, verify, credentials,
-                         scoped_config, client_config):
-
+                         scoped_config, client_config, endpoint_bridge):
         service_name = service_model.endpoint_prefix
         protocol = service_model.metadata['protocol']
         parameter_validation = True
-        if client_config:
-            parameter_validation = client_config.parameter_validation
+        if client_config and not client_config.parameter_validation:
+            parameter_validation = False
+        elif scoped_config:
+            raw_value = str(scoped_config.get('parameter_validation', ''))
+            if raw_value.lower() == 'false':
+                parameter_validation = False
         serializer = botocore.serialize.create_serializer(
             protocol, parameter_validation)
 
         event_emitter = copy.copy(self._event_emitter)
         response_parser = botocore.parsers.create_parser(protocol)
-        endpoint_bridge = botocore.client.ClientEndpointBridge(
-            self._endpoint_resolver, scoped_config, client_config,
-            service_signing_name=service_model.metadata.get('signingName'))
         endpoint_config = endpoint_bridge.resolve(
             service_name, region_name, endpoint_url, is_secure)
 
@@ -45,7 +51,7 @@ class AsyncClientCreator(botocore.client.ClientCreator):
             if client_config.user_agent_extra is not None:
                 user_agent += ' %s' % client_config.user_agent_extra
 
-        signer = AsyncRequestSigner(
+        signer = RequestSigner(
             service_name, endpoint_config['signing_region'],
             endpoint_config['signing_name'],
             endpoint_config['signature_version'],
@@ -66,8 +72,9 @@ class AsyncClientCreator(botocore.client.ClientCreator):
         # Add any additional s3 configuration for client
         self._inject_s3_configuration(
             config_kwargs, scoped_config, client_config)
+        self._conditionally_unregister_fix_s3_host(endpoint_url, event_emitter)
 
-        new_config = botocore.client.Config(**config_kwargs)
+        new_config = AsyncConfig(**config_kwargs)
         endpoint_creator = AsyncEndpointCreator(self.http_session,
                                                 event_emitter)
         endpoint = endpoint_creator.create_endpoint(
@@ -95,36 +102,43 @@ class AsyncClientCreator(botocore.client.ClientCreator):
         self._event_emitter.emit('creating-client-class.%s' % service_name,
                                  class_attributes=class_attributes,
                                  base_classes=bases)
-        cls = type(str(service_name), tuple(bases), class_attributes)
+        class_name = get_service_module_name(service_model)
+        cls = type(str(class_name), tuple(bases), class_attributes)
         return cls
 
 
 class AsyncBaseClient(botocore.client.BaseClient):
 
     @property
+    def http_session(self):
+        return self._endpoint.http_session
+
+    @property
     def _loop(self):
         return self._endpoint._loop
 
     async def _make_api_call(self, operation_name, api_params):
-        request_context = {}
         operation_model = self._service_model.operation_model(operation_name)
-        request_dict = await self._convert_to_request_dict(
+        request_context = {
+            'client_region': self.meta.region_name,
+            'client_config': self.meta.config,
+            'has_streaming_input': operation_model.has_streaming_input
+        }
+        request_dict = self._convert_to_request_dict(
             api_params, operation_model, context=request_context)
 
-        handler, event_response = await self.meta.events.emit_until_response(
+        self.meta.events.emit(
             'before-call.{endpoint_prefix}.{operation_name}'.format(
                 endpoint_prefix=self._service_model.endpoint_prefix,
                 operation_name=operation_name),
             model=operation_model, params=request_dict,
-            request_signer=self._request_signer, context=request_context)
+            request_signer=self._request_signer, context=request_context
+        )
 
-        if event_response is not None:
-            http, parsed_response = event_response
-        else:
-            http, parsed_response = await self._endpoint.make_request(
-                operation_model, request_dict)
+        http, parsed_response = await self._endpoint.make_request(
+            operation_model, request_dict)
 
-        await self.meta.events.async_emit(
+        self.meta.events.emit(
             'after-call.{endpoint_prefix}.{operation_name}'.format(
                 endpoint_prefix=self._service_model.endpoint_prefix,
                 operation_name=operation_name),
@@ -137,35 +151,38 @@ class AsyncBaseClient(botocore.client.BaseClient):
         else:
             return parsed_response
 
-    async def _convert_to_request_dict(self, api_params, operation_model,
-                                       context=None):
-        # Given the API params provided by the user and the operation_model
-        # we can serialize the request to a request_dict.
-        operation_name = operation_model.name
+    def get_paginator(self, operation_name):
+        """Create a paginator for an operation.
+        :type operation_name: string
+        :param operation_name: The operation name.  This is the same name
+            as the method name on the client.  For example, if the
+            method name is ``create_foo``, and you'd normally invoke the
+            operation as ``client.create_foo(**kwargs)``, if the
+            ``create_foo`` operation can be paginated, you can use the
+            call ``client.get_paginator("create_foo")``.
+        :raise OperationNotPageableError: Raised if the operation is not
+            pageable.  You can use the ``client.can_paginate`` method to
+            check if an operation is pageable.
+        :rtype: L{botocore.paginate.Paginator}
+        :return: A paginator object.
+        """
+        if not self.can_paginate(operation_name):
+            raise OperationNotPageableError(operation_name=operation_name)
+        else:
+            actual_operation_name = self._PY_TO_OP_NAME[operation_name]
+            # substitute iterator with async one
+            Paginator.PAGE_ITERATOR_CLS = AsyncPageIterator
+            paginator = Paginator(
+                getattr(self, operation_name),
+                self._cache['page_config'][actual_operation_name])
+            return paginator
 
-        # Emit an event that allows users to modify the parameters at the
-        # beginning of the method. It allows handlers to modify existing
-        # parameters or return a new set of parameters to use.
-        responses = await self.meta.events.async_emit(
-            'provide-client-params.{endpoint_prefix}.{operation_name}'.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
-                operation_name=operation_name),
-            params=api_params, model=operation_model, context=context)
-        api_params = first_non_none_response(responses, default=api_params)
+    async def __aenter__(self):
+        await self.http_session.__aenter__()
+        return self
 
-        event_name = (
-            'before-parameter-build.{endpoint_prefix}.{operation_name}')
-        await self.meta.events.async_emit(
-            event_name.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
-                operation_name=operation_name),
-            params=api_params, model=operation_model, context=context)
-
-        request_dict = self._serializer.serialize_to_request(
-            api_params, operation_model)
-        prepare_request_dict(request_dict, endpoint_url=self._endpoint.host,
-                             user_agent=self._client_config.user_agent)
-        return request_dict
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.http_session.__aexit__(exc_type, exc_val, exc_tb)
 
     def close(self):
-        self._endpoint._connector.close()
+        return self.http_session.close()

@@ -6,7 +6,6 @@ from botocore.endpoint import first_non_none_response
 from botocore.exceptions import EndpointConnectionError, ConnectionClosedError
 from botocore.utils import is_valid_endpoint_url
 from botocore.awsrequest import create_request_object
-from botocore import response
 
 
 logger = logging.getLogger(__name__)
@@ -23,29 +22,29 @@ async def convert_to_response_dict(http_response, operation_model):
         'headers': headers,
         'status_code': http_response.status_code,
     }
-    if (response_dict['status_code'] < 300 and
-            operation_model.has_streaming_output):
-        cl = response_dict['headers'].get('content-length')
-        body = StreamingBody(http_response.raw, cl)
-    else:
-        # TODO: we need a common API for waiting for body
-        await http_response.on_finished
-        body = http_response.content
 
-    response_dict['body'] = body
+    if response_dict['status_code'] >= 300:
+        response_dict['body'] = await read(http_response)
+    elif operation_model.has_streaming_output:
+        response_dict['body'] = patch_stream(http_response.raw)
+    else:
+        response_dict['body'] = await read(http_response)
     return response_dict
 
 
-class StreamingBody(response.StreamingBody):
+async def read(http_response):
+    body = await http_response.raw.read()
+    http_response._content = body
+    return body
 
-    def set_socket_timeout(self, timeout):
-        pass
 
-    def read(self, amt=None):
-        return self._raw_stream.read()
+def patch_stream(raw):
+    raw.set_socket_timeout = noop
+    return raw
 
-    def __iter__(self):
-        return iter(self._raw_stream)
+
+def noop(*args, **kwargs):
+    pass
 
 
 class AsyncEndpoint(botocore.endpoint.Endpoint):
@@ -62,25 +61,12 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
     def _loop(self):
         return self.http_session._loop
 
-    async def create_request(self, params, operation_model=None):
-        request = create_request_object(params)
-        if operation_model:
-            event_name = 'request-created.{endpoint_prefix}.{op_name}'.format(
-                endpoint_prefix=self._endpoint_prefix,
-                op_name=operation_model.name)
-            await self._event_emitter.async_emit(
-                event_name,
-                request=request,
-                operation_name=operation_model.name)
-        prepared_request = self.prepare_request(request)
-        return prepared_request
-
     async def _send_request(self, request_dict, operation_model):
         attempts = 1
-        request = await self.create_request(request_dict, operation_model)
+        request = self.create_request(request_dict, operation_model)
         success_response, exception = await self._get_response(
             request, operation_model, attempts)
-        while await self._needs_retry(attempts, operation_model,
+        while await self._needs_retry(attempts, operation_model, request_dict,
                                       success_response, exception):
             attempts += 1
             # If there is a stream associated with the request, we need
@@ -89,8 +75,8 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             # body.
             request.reset_stream()
             # Create a new request when retried (including a new signature).
-            request = await self.create_request(
-                request_dict, operation_model=operation_model)
+            request = self.create_request(
+                request_dict, operation_model)
             success_response, exception = await self._get_response(
                 request, operation_model, attempts)
         if exception is not None:
@@ -141,14 +127,16 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
                  parser.parse(response_dict, operation_model.output_shape)),
                 None)
 
-    async def _needs_retry(self, attempts, operation_model, response=None,
-                           caught_exception=None):
+    # CUT AND PASTE FROM BOTOCORE
+
+    async def _needs_retry(self, attempts, operation_model, request_dict,
+                     response=None, caught_exception=None):
         event_name = 'needs-retry.%s.%s' % (self._endpoint_prefix,
                                             operation_model.name)
-        responses = await self._event_emitter.async_emit(
+        responses = self._event_emitter.emit(
             event_name, response=response, endpoint=self,
             operation=operation_model, attempts=attempts,
-            caught_exception=caught_exception)
+            caught_exception=caught_exception, request_dict=request_dict)
         handler_response = first_non_none_response(responses)
         if handler_response is None:
             return False
@@ -157,7 +145,9 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             # for the specified number of times.
             logger.debug("Response received to retry, sleeping for "
                          "%s seconds", handler_response)
-            await asyncio.sleep(handler_response)
+
+            # END OF CUTAND PASTE
+            await asyncio.sleep(handler_response, loop=self._loop)
             return True
 
     def _headers(self, headers):
@@ -173,9 +163,9 @@ class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
         super().__init__(*args)
         self.http_session = http_session
 
-    def create_endpoint(self, service_model, region_name=None, is_secure=True,
-                        endpoint_url=None, verify=None,
-                        response_parser_factory=None, timeout=DEFAULT_TIMEOUT):
+    def create_endpoint(self, service_model, region_name, endpoint_url,
+                        verify=None, response_parser_factory=None,
+                        timeout=DEFAULT_TIMEOUT):
         if not is_valid_endpoint_url(endpoint_url):
             raise ValueError("Invalid endpoint: %s" % endpoint_url)
         return AsyncEndpoint(

@@ -1,18 +1,13 @@
 import botocore.session
 import botocore.credentials
-from botocore import utils, retryhandler, translate
+from botocore.exceptions import PartialCredentialsError
+from botocore import retryhandler, translate
 import botocore.regions
 
 from .client import AsyncClientCreator
-from .hooks import AsyncHierarchicalEmitter
 
 
 class AsyncSession(botocore.session.Session):
-
-    def __init__(self, event_hooks=None, **kw):
-        if event_hooks is None:
-            event_hooks = AsyncHierarchicalEmitter()
-        super().__init__(event_hooks=event_hooks, **kw)
 
     def create_client(self, service_name, region_name=None, api_version=None,
                       use_ssl=True, verify=None, endpoint_url=None,
@@ -54,11 +49,17 @@ class AsyncSession(botocore.session.Session):
         event_emitter = self.get_component('event_emitter')
         response_parser_factory = self.get_component(
             'response_parser_factory')
-        if aws_secret_access_key is not None:
+        if aws_access_key_id is not None and aws_secret_access_key is not None:
             credentials = botocore.credentials.Credentials(
                 access_key=aws_access_key_id,
                 secret_key=aws_secret_access_key,
                 token=aws_session_token)
+        elif self._missing_cred_vars(aws_access_key_id,
+                                     aws_secret_access_key):
+            raise PartialCredentialsError(
+                provider='explicit',
+                cred_var=self._missing_cred_vars(aws_access_key_id,
+                                                 aws_secret_access_key))
         else:
             credentials = self.get_credentials()
         endpoint_resolver = self.get_component('endpoint_resolver')
