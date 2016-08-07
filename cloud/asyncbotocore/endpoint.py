@@ -5,7 +5,6 @@ import botocore.endpoint
 from botocore.endpoint import first_non_none_response
 from botocore.exceptions import EndpointConnectionError, ConnectionClosedError
 from botocore.utils import is_valid_endpoint_url
-from botocore.awsrequest import create_request_object
 
 
 logger = logging.getLogger(__name__)
@@ -130,7 +129,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
     # CUT AND PASTE FROM BOTOCORE
 
     async def _needs_retry(self, attempts, operation_model, request_dict,
-                     response=None, caught_exception=None):
+                           response=None, caught_exception=None):
         event_name = 'needs-retry.%s.%s' % (self._endpoint_prefix,
                                             operation_model.name)
         responses = self._event_emitter.emit(
@@ -146,7 +145,7 @@ class AsyncEndpoint(botocore.endpoint.Endpoint):
             logger.debug("Response received to retry, sleeping for "
                          "%s seconds", handler_response)
 
-            # END OF CUTAND PASTE
+            # END OF CUT AND PASTE
             await asyncio.sleep(handler_response, loop=self._loop)
             return True
 
