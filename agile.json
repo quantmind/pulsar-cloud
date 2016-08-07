@@ -1,15 +1,17 @@
 {
+    "python": {
+        "cloud_version": "cloud.__version__"
+    },
     "github": {
         "cloud": {
-            "python_module": "cloud",
-            "version": "cloud.__version__",
+            "version": "{{ cloud_version }}",
             "release_notes": "docs/history"
         }
     },
     "tasks": {
         "release": {
             "description": "make a new release to github",
-            "command": ["github"]
+            "command": ["python", "github"]
         }
     }
 }
