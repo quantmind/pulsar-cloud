@@ -1,16 +1,10 @@
-import copy
-
-import botocore.client
-import botocore.serialize
 import botocore.parsers
 from botocore.exceptions import ClientError, OperationNotPageableError
-from botocore.signers import RequestSigner
 from botocore.utils import get_service_module_name
 from botocore.paginate import Paginator
 
-from .endpoint import AsyncEndpointCreator
-from .config import AsyncConfig
 from .paginate import AsyncPageIterator
+from .args import AsyncClientArgsCreator
 
 
 class AsyncClientCreator(botocore.client.ClientCreator):
@@ -26,73 +20,13 @@ class AsyncClientCreator(botocore.client.ClientCreator):
     def _get_client_args(self, service_model, region_name, is_secure,
                          endpoint_url, verify, credentials,
                          scoped_config, client_config, endpoint_bridge):
-        service_name = service_model.endpoint_prefix
-        protocol = service_model.metadata['protocol']
-        parameter_validation = True
-        if client_config and not client_config.parameter_validation:
-            parameter_validation = False
-        elif scoped_config:
-            raw_value = str(scoped_config.get('parameter_validation', ''))
-            if raw_value.lower() == 'false':
-                parameter_validation = False
-        serializer = botocore.serialize.create_serializer(
-            protocol, parameter_validation)
-
-        event_emitter = copy.copy(self._event_emitter)
-        response_parser = botocore.parsers.create_parser(protocol)
-        endpoint_config = endpoint_bridge.resolve(
-            service_name, region_name, endpoint_url, is_secure)
-
-        # Override the user agent if specified in the client config.
-        user_agent = self._user_agent
-        if client_config is not None:
-            if client_config.user_agent is not None:
-                user_agent = client_config.user_agent
-            if client_config.user_agent_extra is not None:
-                user_agent += ' %s' % client_config.user_agent_extra
-
-        signer = RequestSigner(
-            service_name, endpoint_config['signing_region'],
-            endpoint_config['signing_name'],
-            endpoint_config['signature_version'],
-            credentials, event_emitter)
-
-        # Create a new client config to be passed to the client based
-        # on the final values. We do not want the user to be able
-        # to try to modify an existing client with a client config.
-        config_kwargs = dict(
-            region_name=endpoint_config['region_name'],
-            signature_version=endpoint_config['signature_version'],
-            user_agent=user_agent)
-        if client_config is not None:
-            config_kwargs.update(
-                connect_timeout=client_config.connect_timeout,
-                read_timeout=client_config.read_timeout)
-
-        # Add any additional s3 configuration for client
-        self._inject_s3_configuration(
-            config_kwargs, scoped_config, client_config)
-        self._conditionally_unregister_fix_s3_host(endpoint_url, event_emitter)
-
-        new_config = AsyncConfig(**config_kwargs)
-        endpoint_creator = AsyncEndpointCreator(self.http_session,
-                                                event_emitter)
-        endpoint = endpoint_creator.create_endpoint(
-            service_model, region_name=endpoint_config['region_name'],
-            endpoint_url=endpoint_config['endpoint_url'], verify=verify,
-            response_parser_factory=self._response_parser_factory,
-            timeout=(new_config.connect_timeout, new_config.read_timeout))
-
-        return {
-            'serializer': serializer,
-            'endpoint': endpoint,
-            'response_parser': response_parser,
-            'event_emitter': event_emitter,
-            'request_signer': signer,
-            'service_model': service_model,
-            'loader': self._loader,
-            'client_config': new_config
-        }
+        args_creator = AsyncClientArgsCreator(
+            self._event_emitter, self._user_agent,
+            self._response_parser_factory, self._loader)
+        return args_creator.get_client_args(
+            service_model, region_name, is_secure, endpoint_url,
+            verify, credentials, scoped_config, client_config, endpoint_bridge,
+            self.http_session)
 
     def _create_client_class(self, service_name, service_model):
         class_attributes = self._create_methods(service_model)
