@@ -15,6 +15,7 @@ release-notes.md
 #python
 pulsar_cloud.egg-info
 *.pyc
+.eggs
 __pycache__
 pulsar_pusher.egg-info
 build

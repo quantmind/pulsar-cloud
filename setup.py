@@ -40,7 +40,7 @@ meta = dict(
     zip_safe=False,
     license='BSD',
     long_description=read('README.rst'),
-    setup_requires=['pulsar'],
+    setup_requires=['pulsar', 'wheel'],
     install_requires=requirements('requirements.txt')[0],
     packages=find_packages(include=['cloud', 'cloud.*']),
     scripts=['bin/s3upload.py'],
