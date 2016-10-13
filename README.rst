@@ -1,5 +1,3 @@
-Pulsar Cloud
-================
 
 :Badges: |license|  |pyversions| |status| |pypiversion|
 :Master CI: |master-build|_ |coverage-master|
@@ -23,8 +21,13 @@ Pulsar Cloud
 .. |coverage-master| image:: https://coveralls.io/repos/quantmind/pulsar-cloud/badge.svg?branch=master&service=github
   :target: https://coveralls.io/github/quantmind/pulsar-cloud?branch=master
 
+.. contents:: **CONTENTS**
+
+`CHANGELOG </docs/changelog.md>`_
+
+
 Requirements
----------------
+==================
 
 * Python 3.5 or above
 * pulsar_
@@ -33,13 +36,14 @@ Requirements
 
 
 Botocore
-------------
+==================
 
-This library provides two asynchornous implementations of botocore_.
+This library provides two asynchronous implementations of botocore_.
 
 Some part of the module are taken from aiobotocore_ - `apache LICENSE <https://github.com/aio-libs/aiobotocore/blob/master/LICENSE>`_.
 
-**Asyncio Botocore**
+Asyncio Botocore
+--------------------
 
 The first implementation uses asyncio from the python standard libray only:
 
@@ -51,7 +55,8 @@ The first implementation uses asyncio from the python standard libray only:
     s3 = await s3.put_object(...)
 
 
-**Green Botocore**
+Green Botocore
+------------------
 
 The second implementation, build on top of asyncio botocore, uses
 pulsar_ and greenlet_ to obtain an implicit asynchronous behaviour.
@@ -71,7 +76,8 @@ Usage:
     await pool.submit(execute)
 
 
-**S3 uploader script**
+S3 uploader
+---------------
 
 Usage::
 
@@ -79,7 +85,7 @@ Usage::
 
 
 Pusher
-------------
+==================
 A client and server pusher_ implementation using
 pulsar_ asynchronous framework.
 Create a pusher instance
@@ -97,6 +103,7 @@ Subscribe to a channel as a client
 
     channel = await pusher.subscribe('test_channel')
     channel.bind('event', mycallback)
+
 
 .. _`Luca Sbardella`: http://lucasbardella.com
 .. _`Quantmind`: http://quantmind.com
