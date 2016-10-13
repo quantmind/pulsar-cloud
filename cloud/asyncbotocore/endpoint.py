@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 import botocore.endpoint
-from botocore.endpoint import first_non_none_response
+from botocore.endpoint import first_non_none_response, MAX_POOL_CONNECTIONS
 from botocore.exceptions import EndpointConnectionError, ConnectionClosedError
 from botocore.utils import is_valid_endpoint_url
 
@@ -164,7 +164,8 @@ class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
 
     def create_endpoint(self, service_model, region_name, endpoint_url,
                         verify=None, response_parser_factory=None,
-                        timeout=DEFAULT_TIMEOUT):
+                        timeout=DEFAULT_TIMEOUT,
+                        max_pool_connections=MAX_POOL_CONNECTIONS):
         if not is_valid_endpoint_url(endpoint_url):
             raise ValueError("Invalid endpoint: %s" % endpoint_url)
         return AsyncEndpoint(
@@ -175,4 +176,5 @@ class AsyncEndpointCreator(botocore.endpoint.EndpointCreator):
             proxies=self._get_proxies(endpoint_url),
             verify=self._get_verify_value(verify),
             timeout=timeout,
+            max_pool_connections=max_pool_connections,
             response_parser_factory=response_parser_factory)

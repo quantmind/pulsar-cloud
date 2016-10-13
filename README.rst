@@ -48,7 +48,7 @@ The first implementation uses asyncio from the python standard libray only:
     from cloud.aws import AsyncioBotocore
 
     s3 = AsyncioBotocore('s3', 'us-east-1')
-    s3 = yield from s3.put_object(...)
+    s3 = await s3.put_object(...)
 
 
 **Green Botocore**
@@ -68,7 +68,7 @@ Usage:
         ec2.put_object(...)
 
     pool = GreenPool()
-    yield from pool.submit(execute)
+    await pool.submit(execute)
 
 
 **S3 uploader script**
@@ -95,7 +95,7 @@ Subscribe to a channel as a client
 
 .. code:: python
 
-    channel = yield from pusher.subscribe('test_channel')
+    channel = await pusher.subscribe('test_channel')
     channel.bind('event', mycallback)
 
 .. _`Luca Sbardella`: http://lucasbardella.com
