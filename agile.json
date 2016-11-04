@@ -4,14 +4,9 @@
     },
     "github": {
         "cloud": {
+            "description": "make a new release to github",
             "version": "{{ cloud_version }}",
             "release_notes": "docs/history"
-        }
-    },
-    "tasks": {
-        "release": {
-            "description": "make a new release to github",
-            "command": ["python", "github"]
         }
     }
 }

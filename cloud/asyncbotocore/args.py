@@ -36,7 +36,6 @@ class AsyncClientArgsCreator(ClientArgsCreator):
 
         # Add any additional s3 configuration for client
         config_kwargs['s3'] = s3_config
-        #self._conditionally_unregister_fix_s3_host(endpoint_url, event_emitter)
 
         # END OF CUT AND PASTE
 
