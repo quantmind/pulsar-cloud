@@ -5,41 +5,21 @@ import json
 import asyncio
 
 from pulsar.apps.http import HttpClient
-from pulsar.apps.greenio import GreenPool
 from pulsar.utils.string import random_string
 
 from cloud.aws import GreenBotocore
 from cloud.utils.s3 import MULTI_PART_SIZE
 
-from tests import RandomFile, BUCKET
+from tests import RandomFile, BUCKET, BotocoreMixin, green
 
 
-def green(f):
-
-    def _(self):
-        return self.green_pool.submit(f, self)
-
-    return _
-
-
-class BotocoreMixin:
+class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.green_pool = GreenPool()
-        cls.sessions = HttpClient(pool_size=4, close_connections=True)
-        kwargs = dict(http_session=cls.sessions,
-                      region_name='us-east-1')
-        cls.ec2 = GreenBotocore('ec2', **kwargs)
-        cls.s3 = GreenBotocore('s3', **kwargs)
-
-    @classmethod
-    def tearDownClass(cls):
-        return cls.sessions.close()
-
-    def assert_status(self, response, code=200):
-        meta = response['ResponseMetadata']
-        self.assertEqual(meta['HTTPStatusCode'], code)
+        super().setUpClass()
+        cls.ec2 = GreenBotocore('ec2', **cls.kwargs)
+        cls.s3 = GreenBotocore('s3', **cls.kwargs)
 
     def assert_s3_equal(self, body, copy_name):
         response = self.s3.get_object(Bucket=BUCKET, Key=copy_name)
@@ -90,9 +70,6 @@ class BotocoreMixin:
                 break
             responses.append(n)
         return responses
-
-
-class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
 
     def test_no_http_session(self):
         cli = GreenBotocore('s3')

@@ -1,5 +1,10 @@
 import os
 import tempfile
+import unittest
+
+from pulsar.apps.greenio import GreenPool
+from pulsar.apps.http import HttpClient
+
 
 ONEKB = 2**10
 BUCKET = os.environ.get('TEST_S3_BUCKET', 'quantmind-tests')
@@ -35,3 +40,31 @@ class RandomFile:
             with open(self.filename, 'rb') as f:
                 return f.read()
         return b''
+
+
+def green(f):
+
+    def _(self):
+        return self.green_pool.submit(f, self)
+
+    return _
+
+
+class BotocoreMixin:
+
+    @classmethod
+    def setUpClass(cls):
+        cls.green_pool = GreenPool()
+        cls.sessions = HttpClient(pool_size=4, close_connections=True)
+        cls.kwargs = dict(http_session=cls.sessions,
+                          region_name='us-east-1')
+        cls.test = unittest.TestCase()
+
+    @classmethod
+    def tearDownClass(cls):
+        return cls.sessions.close()
+
+    @classmethod
+    def assert_status(cls, response, code=200):
+        meta = response['ResponseMetadata']
+        cls.test.assertEqual(meta['HTTPStatusCode'], code)
