@@ -14,6 +14,7 @@ script:
   - flake8
   - python setup.py test --coverage -q
   - if [[ $TRAVIS_PYTHON_VERSION == 3.5.2 ]]; then python setup.py test --coveralls; fi
+  - python setup.py test --io uv
 
 notifications:
   email: false
