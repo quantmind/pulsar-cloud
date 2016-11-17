@@ -8,12 +8,6 @@ class AsyncPageIterator(PageIterator):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._init_pager()
-
-    def __iter__(self):
-        raise NotImplementedError
-
-    def _init_pager(self):
         self._is_stop = False
         self._current_kwargs = self._op_kwargs
         self._previous_next_token = None
@@ -79,6 +73,9 @@ class AsyncPageIterator(PageIterator):
             self._previous_next_token = self._next_token
             return response
 
+    def __iter__(self):
+        raise NotImplementedError
+
     async def __aiter__(self):
         return self
 
@@ -90,16 +87,10 @@ class AsyncPageIterator(PageIterator):
 
     def result_key_iters(self):
         raise NotImplementedError
-        # teed_results = tee(self, len(self.result_keys))
-        # return [ResultKeyIterator(i, result_key) for i, result_key in
-        #         zip(teed_results, self.result_keys)]
 
     async def build_full_result(self):
         complete_result = {}
-        while True:
-            response = await self.next_page()
-            if response is None:
-                break
+        async for response in self:
             page = response
             # We want to try to catch operation object pagination
             # and format correctly for those. They come in the form

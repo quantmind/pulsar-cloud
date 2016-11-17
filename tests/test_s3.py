@@ -223,3 +223,22 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         for i, el in enumerate(responses):
             key = el['Contents'][0]['Key']
             self.assertEqual(key, '%s/key%d' % (name, i))
+
+    async def test_paginate_asyncio_build_full_result(self):
+        name = random_string()
+        for i in range(5):
+            key_name = '%s/key%d' % (name, i)
+            await self._asyncio_create_object(key_name, 'bla')
+
+        await asyncio.sleep(3)
+        s3 = self.s3.client
+        paginator = s3.get_paginator('list_objects')
+        pages = paginator.paginate(MaxKeys=1, Bucket=BUCKET, Prefix=name)
+        result = await pages.build_full_result()
+
+        self.assertEqual(len(result), 1)
+        responses = result['Contents']
+        self.assertEqual(len(responses), 5)
+        for i, el in enumerate(responses):
+            key = el['Key']
+            self.assertEqual(key, '%s/key%d' % (name, i))

@@ -2,7 +2,9 @@
 concurrency = greenlet
 source = cloud
 omit =
-    *cloud/utils/version.py
+    cloud/__init__.py
+    cloud/utils/__init__.py
+    cloud/utils/version.py
 
 [report]
 # Regexes for lines to exclude from consideration
