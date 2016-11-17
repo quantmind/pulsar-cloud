@@ -68,8 +68,12 @@ class GreenIterator(GreenProxy):
     '''A pulsar compliant WSGI iterator
     '''
     def __iter__(self):
-        for data in self.client:
-            yield wait(data)
+        iterator = wait(self.client.__aiter__())
+        while True:
+            try:
+                yield wait(iterator.__anext__())
+            except StopAsyncIteration:
+                break
 
 
 class GreenPaginator(GreenProxy):

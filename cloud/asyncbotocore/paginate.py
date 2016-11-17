@@ -86,7 +86,7 @@ class AsyncPageIterator(PageIterator):
         if self._is_stop:
             raise StopAsyncIteration  # noqa
 
-        return self.next_page()
+        return await self.next_page()
 
     def result_key_iters(self):
         raise NotImplementedError

@@ -46,6 +46,14 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         self.assert_status(response)
         return response
 
+    async def _asyncio_create_object(self, key, body):
+        s3 = self.s3.client
+        response = await s3.put_object(Bucket=BUCKET, Body=body,
+                                       ContentType='text/plain',
+                                       Key=key)
+        self.assert_status(response)
+        return response
+
     def _green_sleep(self, sleep):
         self.green_pool.wait(asyncio.sleep(sleep))
 
@@ -179,7 +187,7 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         self.assertTrue(result['total_size'])
 
     @green
-    def test_can_paginate(self):
+    def test_paginate(self):
         name = random_string()
         for i in range(5):
             key_name = '%s/key%d' % (name, i)
@@ -189,7 +197,27 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         self._green_sleep(3)
         paginator = self.s3.get_paginator('list_objects')
         pages = paginator.paginate(MaxKeys=1, Bucket=BUCKET, Prefix=name)
-        responses = self._fetch_all(pages)
+        responses = list(pages)
+        # responses = self._fetch_all(pages)
+
+        self.assertEqual(len(responses), 5)
+        for i, el in enumerate(responses):
+            key = el['Contents'][0]['Key']
+            self.assertEqual(key, '%s/key%d' % (name, i))
+
+    async def test_paginate_asyncio(self):
+        name = random_string()
+        for i in range(5):
+            key_name = '%s/key%d' % (name, i)
+            await self._asyncio_create_object(key_name, 'bla')
+
+        await asyncio.sleep(3)
+        s3 = self.s3.client
+        paginator = s3.get_paginator('list_objects')
+        pages = paginator.paginate(MaxKeys=1, Bucket=BUCKET, Prefix=name)
+        responses = []
+        async for page in pages:
+            responses.append(page)
 
         self.assertEqual(len(responses), 5)
         for i, el in enumerate(responses):
