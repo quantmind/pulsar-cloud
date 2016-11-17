@@ -45,7 +45,9 @@ Some part of the module are taken from aiobotocore_ - `apache LICENSE <https://g
 Asyncio Botocore
 --------------------
 
-The first implementation uses asyncio from the python standard libray only:
+The first implementation uses asyncio from the python standard libray only and
+requires an asyncio compatible HTTP client such as the pulsar one
+(used by default):
 
 .. code:: python
 

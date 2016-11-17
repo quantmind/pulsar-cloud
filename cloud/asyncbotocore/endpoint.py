@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import zlib
 
 import botocore.endpoint
 from botocore.endpoint import first_non_none_response, MAX_POOL_CONNECTIONS
@@ -27,8 +28,24 @@ async def convert_to_response_dict(http_response, operation_model):
     elif operation_model.has_streaming_output:
         response_dict['body'] = patch_stream(http_response.raw)
     else:
-        response_dict['body'] = await read(http_response)
+        body = await read(http_response)
+        encoding = headers.get('Content-Encoding')
+        if encoding == "gzip":
+            body = decompress_gzip(body)
+        elif encoding == "deflate":
+            body = decompress_deflate(body)
+        response_dict['body'] = body
     return response_dict
+
+
+def decompress_deflate(body):
+    decompress = zlib.decompressobj()
+    return decompress.decompress(body)
+
+
+def decompress_gzip(body):
+    decompress = zlib.decompressobj(16+zlib.MAX_WBITS)
+    return decompress.decompress(body)
 
 
 async def read(http_response):

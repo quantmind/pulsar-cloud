@@ -36,18 +36,18 @@ class DynamoTest(BotocoreMixin, unittest.TestCase):
                 {
                     'AttributeName': 'testKey',
                     'AttributeType': 'S'
-                },
+                }
             ],
             'KeySchema': [
                 {
                     'AttributeName': 'testKey',
                     'KeyType': 'HASH'
-                },
+                }
             ],
             'ProvisionedThroughput': {
                 'ReadCapacityUnits': 1,
                 'WriteCapacityUnits': 1
-            },
+            }
         }
         response = await cls.client.create_table(**table_kwargs)
         while not await cls.is_table_ready(table_name):
@@ -60,27 +60,26 @@ class DynamoTest(BotocoreMixin, unittest.TestCase):
         await cls.client.delete_table(table_name or cls.table_name)
 
     @classmethod
-    async def put_item(cls, key_string_value):
+    async def put_item(cls, key_string_value, **item):
+        item['testKey'] = {
+            'S': key_string_value
+        }
         response = await cls.client.put_item(
             TableName=cls.table_name,
-            Item={
-                'testKey': {
-                    'S': key_string_value
-                }
-            },
+            Item=item
         )
         cls.assert_status(response)
 
-    async def test_can_get_item(self):
-        test_value = 'testValue'
-        await self.put_item(test_value)
+    async def test_get_item(self):
+        test_key = 'testValue'
+        await self.put_item(test_key, foo={'S': 't' * 2**13})
         response = await self.client.get_item(
             TableName=self.table_name,
             Key={
                 'testKey': {
-                    'S': test_value
+                    'S': test_key
                 }
             },
         )
         self.assert_status(response)
-        self.assertEqual(response['Item']['testKey'], {'S': test_value})
+        self.assertEqual(response['Item']['testKey'], {'S': test_key})

@@ -55,7 +55,8 @@ class BotocoreMixin:
     @classmethod
     def setUpClass(cls):
         cls.green_pool = GreenPool()
-        cls.sessions = HttpClient(pool_size=4, close_connections=True)
+        cls.sessions = HttpClient(pool_size=4, close_connections=True,
+                                  decompress=False)
         cls.kwargs = dict(http_session=cls.sessions,
                           region_name='us-east-1')
         cls.test = unittest.TestCase()
