@@ -6,7 +6,7 @@ from cloud.aws import AsyncioBotocore
 from tests import BotocoreMixin
 
 
-class DynamoTest(BotocoreMixin, unittest.TestCase):
+class DynamoMixin(BotocoreMixin):
 
     @classmethod
     async def setUpClass(cls):
@@ -57,7 +57,9 @@ class DynamoTest(BotocoreMixin, unittest.TestCase):
 
     @classmethod
     async def delete_table(cls, table_name=None):
-        await cls.client.delete_table(table_name or cls.table_name)
+        await cls.client.delete_table(
+            TableName=table_name or cls.table_name
+        )
 
     @classmethod
     async def put_item(cls, key_string_value, **item):
@@ -69,6 +71,9 @@ class DynamoTest(BotocoreMixin, unittest.TestCase):
             Item=item
         )
         cls.assert_status(response)
+
+
+class DynamoTest(DynamoMixin, unittest.TestCase):
 
     async def test_get_item(self):
         test_key = 'testValue'

@@ -51,11 +51,12 @@ def green(f):
 
 
 class BotocoreMixin:
+    pool_size = 10
 
     @classmethod
     def setUpClass(cls):
         cls.green_pool = GreenPool()
-        cls.sessions = HttpClient(pool_size=4, close_connections=True,
+        cls.sessions = HttpClient(pool_size=cls.pool_size,
                                   decompress=False)
         cls.kwargs = dict(http_session=cls.sessions,
                           region_name='us-east-1')
