@@ -4,6 +4,8 @@ import string
 import json
 import asyncio
 
+from botocore.exceptions import ClientError
+
 from pulsar.apps.http import HttpClient
 from pulsar.utils.string import random_string
 
@@ -242,3 +244,14 @@ class AsyncioBotocoreTest(BotocoreMixin, unittest.TestCase):
         for i, el in enumerate(responses):
             key = el['Key']
             self.assertEqual(key, '%s/key%d' % (name, i))
+
+    @green
+    def test_head_object(self):
+        name = random_string()
+        s3 = self.s3
+        with self.assertRaises(ClientError) as ex:
+            s3.head_object(
+                Bucket=BUCKET,
+                Key=name
+            )
+        self.assert_status(ex.exception.response, 404)
