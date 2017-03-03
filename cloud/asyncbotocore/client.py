@@ -22,7 +22,8 @@ class AsyncClientCreator(botocore.client.ClientCreator):
                          scoped_config, client_config, endpoint_bridge):
         args_creator = AsyncClientArgsCreator(
             self._event_emitter, self._user_agent,
-            self._response_parser_factory, self._loader)
+            self._response_parser_factory, self._loader,
+            self._exceptions_factory)
         return args_creator.get_client_args(
             service_model, region_name, is_secure, endpoint_url,
             verify, credentials, scoped_config, client_config, endpoint_bridge,

@@ -3,17 +3,16 @@ language: python
 sudo: false
 
 python:
-  - 3.5.2
-  - 3.6-dev
+  - 3.5
+  - 3.6.0
 
 install:
-  - pip install -r requirements-dev.txt
-  - pip install git+https://github.com/quantmind/pulsar.git
+  - ./install-dev.sh
 
 script:
   - flake8
   - python setup.py test --coverage -q
-  - if [[ $TRAVIS_PYTHON_VERSION == 3.5.2 ]]; then python setup.py test --coveralls; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.6.0 ]]; then python setup.py test --coveralls; fi
   - python setup.py test --io uv
 
 notifications:

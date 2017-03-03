@@ -63,5 +63,6 @@ class AsyncClientArgsCreator(ClientArgsCreator):
             'service_model': service_model,
             'loader': self._loader,
             'client_config': new_config,
-            'partition': partition
+            'partition': partition,
+            'exceptions_factory': self._exceptions_factory
         }

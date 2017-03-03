@@ -21,3 +21,4 @@ pulsar_pusher.egg-info
 build
 _build
 dist
+venv
