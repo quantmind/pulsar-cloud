@@ -11,9 +11,9 @@ install:
 
 script:
   - flake8
-  - python setup.py test --coverage -q
+  - python setup.py test --coverage -q --sequential
   - if [[ $TRAVIS_PYTHON_VERSION == 3.6.0 ]]; then python setup.py test --coveralls; fi
-  - python setup.py test --io uv
+  - python setup.py test --io uv --sequential
 
 notifications:
   email: false
